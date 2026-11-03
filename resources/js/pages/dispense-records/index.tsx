@@ -37,6 +37,7 @@ interface RecordPage {
     current_page: number;
     last_page: number;
     total: number;
+    from: number | null;
     links: PaginationLink[];
 }
 
@@ -89,13 +90,14 @@ export default function DispensingIndex({ records }: { records: RecordPage }) {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y">
-                                            {records.data.map((record) => {
+                                            {records.data.map((record, index) => {
                                                 const total = record.items.reduce((sum, item) => sum + Number(item.total_price), 0);
+                                                const displayNumber = (records.from ?? 1) + index;
 
                                                 return (
                                                     <tr key={record.id} className="align-top hover:bg-muted/30">
                                                         <td className="px-3 py-4">
-                                                            <p className="font-medium">#{record.id}</p>
+                                                            <p className="font-medium">#{displayNumber}</p>
                                                             <p className="mt-1 text-xs text-muted-foreground">{record.dispense_date}</p>
                                                         </td>
                                                         <td className="px-3 py-4 font-medium">{record.patient.patient_name}</td>

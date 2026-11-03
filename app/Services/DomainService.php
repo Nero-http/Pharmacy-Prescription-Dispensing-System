@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Doctor;
+use App\Models\Patient;
 use App\Models\Medicine;
 use App\Models\DispenseRecord;
 use Illuminate\Support\Facades\DB;
@@ -22,6 +23,38 @@ class DomainService
         }
 
         return $data;
+    }
+
+    public function createPatient(array $data): Patient
+    {
+        $data = $this->sanitize($data);
+
+        return Patient::create($data);
+    }
+
+    public function updatePatient(Patient $patient, array $data): Patient
+    {
+        $data = $this->sanitize($data);
+        $patient->update($data);
+
+        return $patient->refresh();
+    }
+
+    public function createDoctor(array $data): Doctor
+    {
+        $data = $this->sanitize($data);
+        $data['doctor_license_no'] = strtoupper($data['doctor_license_no']);
+
+        return Doctor::create($data);
+    }
+
+    public function updateDoctor(Doctor $doctor, array $data): Doctor
+    {
+        $data = $this->sanitize($data);
+        $data['doctor_license_no'] = strtoupper($data['doctor_license_no']);
+        $doctor->update($data);
+
+        return $doctor->refresh();
     }
 
     /**

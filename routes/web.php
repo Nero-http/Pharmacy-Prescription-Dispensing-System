@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\MedicineController;
 use App\Http\Controllers\DispenseRecordController;
+use App\Http\Controllers\PatientController;
+use App\Http\Controllers\DoctorController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use Inertia\Inertia;
@@ -36,6 +38,10 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('dispense-records', DispenseRecordController::class)
         ->only(['index', 'create', 'store', 'edit', 'update']);
+    Route::resource('patients', PatientController::class)
+        ->only(['store', 'update']);
+    Route::resource('doctors', DoctorController::class)
+        ->only(['store', 'update']);
 
 });
 

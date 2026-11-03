@@ -21,4 +21,11 @@ class DashboardTest extends TestCase
 
         $this->get('/dashboard')->assertOk();
     }
+
+    public function test_application_layout_includes_csrf_token()
+    {
+        $this->get('/login')
+            ->assertOk()
+            ->assertSee('meta name="csrf-token"', false);
+    }
 }

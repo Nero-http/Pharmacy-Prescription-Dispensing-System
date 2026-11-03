@@ -69,6 +69,10 @@ class DemoPharmacySeeder extends Seeder
                     $data
                 );
 
+                if ($doctor->doctor_name !== $data['doctor_name']) {
+                    $doctor->update(['doctor_name' => $data['doctor_name']]);
+                }
+
                 if ($doctor->wasRecentlyCreated) {
                     $added['doctors']++;
                 }

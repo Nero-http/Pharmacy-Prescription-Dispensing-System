@@ -31,7 +31,7 @@
                     @foreach ($dispenseRecords as $record)
                         <tr>
                             <td style="padding: 10px; border-bottom: 1px solid #ddd;">
-                                {{ $record->id }}
+                                #{{ $dispenseRecords->firstItem() + $loop->index }}
                             </td>
 
                             <td style="padding: 10px; border-bottom: 1px solid #ddd;">

@@ -188,4 +188,40 @@ class PpdsWorkflowTest extends TestCase
         $this->assertSame(3, $medicine->fresh()->stock_quantity);
         $this->assertSame(0, DispenseRecord::count());
     }
+
+    public function test_patients_and_doctors_can_be_created_and_updated_for_dispensing(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $this->postJson('/patients', [
+            'patient_name' => 'New Patient',
+        ])->assertCreated()->assertJsonPath('patient.patient_name', 'New Patient');
+
+        $patient = Patient::firstOrFail();
+        $this->putJson("/patients/{$patient->id}", [
+            'patient_name' => 'Updated Patient',
+        ])->assertOk()->assertJsonPath('patient.patient_name', 'Updated Patient');
+
+        $this->assertSame(1, Patient::count());
+        $this->assertSame('Updated Patient', $patient->refresh()->patient_name);
+
+        $this->postJson('/doctors', [
+            'doctor_name' => 'Dr. New Doctor',
+            'doctor_license_no' => 'lic-1001',
+        ])->assertCreated()->assertJsonPath('doctor.doctor_license_no', 'LIC-1001');
+
+        $doctor = Doctor::firstOrFail();
+        $this->putJson("/doctors/{$doctor->id}", [
+            'doctor_name' => 'Dr. Updated Doctor',
+            'doctor_license_no' => 'lic-1002',
+        ])->assertOk()->assertJsonPath('doctor.doctor_license_no', 'LIC-1002');
+
+        $this->assertSame(1, Doctor::count());
+        $this->assertSame('Dr. Updated Doctor', $doctor->refresh()->doctor_name);
+
+        $this->postJson('/doctors', [
+            'doctor_name' => 'Duplicate License Doctor',
+            'doctor_license_no' => 'lic-1002',
+        ])->assertUnprocessable()->assertJsonValidationErrors('doctor_license_no');
+    }
 }

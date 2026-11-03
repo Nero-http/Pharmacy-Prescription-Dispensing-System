@@ -24,7 +24,15 @@
 @endphp
 
 <div class="container">
-    <h1>Edit Dispensing Record #{{ $dispense_record->id }}</h1>
+    @php
+        $orderedRecordIds = \App\Models\DispenseRecord::query()
+            ->latest('dispense_date')
+            ->latest('id')
+            ->pluck('id');
+        $displayNumber = $orderedRecordIds->search($dispense_record->id);
+        $displayNumber = $displayNumber === false ? 1 : $displayNumber + 1;
+    @endphp
+    <h1>Edit Dispensing Record #{{ $displayNumber }}</h1>
 
     @if ($errors->any())
         <div class="error-summary">

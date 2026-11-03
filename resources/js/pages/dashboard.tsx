@@ -1,8 +1,20 @@
+
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+} from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowDownRight, ArrowRight, ClipboardList, Package, PackagePlus, Pill, PlusCircle } from 'lucide-react';
+import {
+    ArrowRight,
+    ClipboardList,
+    Package,
+    Pill,
+    Plus,
+} from 'lucide-react';
 
 interface DashboardProps {
     stats: {
@@ -28,81 +40,155 @@ interface DashboardProps {
     }[];
 }
 
-const amount = new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const amount = new Intl.NumberFormat(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
 
-export default function Dashboard({ stats, recentRecords, lowStockMedicines }: DashboardProps) {
-    const cards = [
-        { title: 'Total medicines', value: stats.total_medicines, description: 'Products in your catalog', icon: Pill },
-        { title: 'Total stock', value: stats.total_stock.toLocaleString(), description: 'Units currently on hand', icon: Package },
-        { title: 'Low stock', value: stats.low_stock_medicines, description: 'Medicines at 10 units or less', icon: ArrowDownRight },
-        { title: 'Dispensing records', value: stats.total_dispensing_records, description: 'Records created to date', icon: ClipboardList },
-    ];
+const formatDoctorName = (name: string): string => {
+    const cleanName = name
+        .replace(/\s*\[ppds demo\]\s*$/i, '')
+        .trim();
 
+    return /^dr\.?\s*/i.test(cleanName)
+        ? cleanName
+        : `Dr. ${cleanName}`;
+};
+
+const statistics = [
+    { title: 'Total Medicines', key: 'total_medicines' },
+    { title: 'Total Stock', key: 'total_stock' },
+    { title: 'Low Stock', key: 'low_stock_medicines' },
+    { title: 'Dispensing Records', key: 'total_dispensing_records' },
+] as const;
+
+export default function Dashboard({
+    stats,
+    recentRecords,
+    lowStockMedicines,
+}: DashboardProps) {
     return (
-        <AppLayout breadcrumbs={[{ title: 'Dashboard', href: route('dashboard') }]}>
+        <AppLayout
+            breadcrumbs={[
+                { title: 'Dashboard', href: route('dashboard') },
+            ]}
+        >
             <Head title="Dashboard" />
-            <main className="space-y-6 p-4 md:p-8">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+
+            <main className="space-y-6 p-5 md:p-7">
+                {/* Page heading */}
+                <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
                     <div>
-                        <p className="text-sm font-medium text-primary">Pharmacy overview</p>
-                        <h1 className="mt-1 text-2xl font-semibold tracking-tight">Dashboard</h1>
-                        <p className="mt-1 text-sm text-muted-foreground">A live view of inventory and dispensing activity.</p>
+                        <h1 className="text-xl font-semibold tracking-tight">
+                            Dashboard
+                        </h1>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Overview of medicine inventory and dispensing records.
+                        </p>
                     </div>
+
                     <div className="flex flex-wrap gap-2">
                         <Button variant="outline" asChild>
-                            <Link href={route('medicines.create')}><PackagePlus /> Add medicine</Link>
+                            <Link href={route('medicines.create')}>
+                                <Plus className="mr-2 size-4" />
+                                Add Medicine
+                            </Link>
                         </Button>
-                        <Button asChild>
-                            <Link href={route('dispense-records.create')}><PlusCircle /> Dispense medicine</Link>
+
+                        <Button asChild className="bg-emerald-700 text-white hover:bg-emerald-800">
+                            <Link href={route('dispense-records.create')}>
+                                <Plus className="mr-2 size-4" />
+                                New Dispensing
+                            </Link>
                         </Button>
                     </div>
-                </div>
+                </section>
 
-                <section aria-label="Pharmacy statistics" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    {cards.map(({ title, value, description, icon: Icon }) => (
-                        <Card key={title} className="rounded-xl shadow-sm">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-                                <Icon className="size-4 text-primary" aria-hidden="true" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-semibold tabular-nums">{value}</div>
-                                <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+                {/* Statistics */}
+                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    {statistics.map((item) => (
+                        <Card key={item.key} className="rounded-lg shadow-none">
+                            <CardContent className="p-5">
+                                <p className="text-sm text-muted-foreground">
+                                    {item.title}
+                                </p>
+                                <p className="mt-2 text-2xl font-semibold tabular-nums">
+                                    {stats[item.key].toLocaleString()}
+                                </p>
                             </CardContent>
                         </Card>
                     ))}
                 </section>
 
-                <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-                    <Card className="rounded-xl shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between">
+                {/* Main content */}
+                <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
+                    {/* Recent dispensing */}
+                    <Card className="rounded-lg shadow-none">
+                        <CardHeader className="flex flex-row items-center justify-between border-b px-5 py-4">
                             <div>
-                                <CardTitle>Recent dispensing</CardTitle>
-                                <p className="mt-1 text-sm text-muted-foreground">Latest completed dispensing records.</p>
+                                <CardTitle className="text-base font-semibold">
+                                    Recent Dispensing
+                                </CardTitle>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Recently recorded transactions
+                                </p>
                             </div>
+
                             <Button variant="ghost" size="sm" asChild>
-                                <Link href={route('dispense-records.index')}>View all <ArrowRight /></Link>
+                                <Link href={route('dispense-records.index')}>
+                                    View all
+                                    <ArrowRight className="ml-2 size-4" />
+                                </Link>
                             </Button>
                         </CardHeader>
-                        <CardContent>
+
+                        <CardContent className="p-0">
                             {recentRecords.length === 0 ? (
-                                <div className="rounded-lg border border-dashed bg-muted/30 px-6 py-10 text-center">
+                                <div className="px-5 py-12 text-center">
                                     <ClipboardList className="mx-auto size-8 text-muted-foreground" />
-                                    <p className="mt-3 font-medium">No dispensing activity yet</p>
-                                    <p className="mt-1 text-sm text-muted-foreground">New records will appear here as medicines are dispensed.</p>
+                                    <p className="mt-3 text-sm font-medium">
+                                        No dispensing records yet
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        New transactions will appear here.
+                                    </p>
                                 </div>
                             ) : (
                                 <div className="divide-y">
                                     {recentRecords.map((record) => (
-                                        <div key={record.id} className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+                                        <div
+                                            key={record.id}
+                                            className="flex flex-col justify-between gap-3 px-5 py-4 sm:flex-row sm:items-center"
+                                        >
                                             <div className="min-w-0">
-                                                <p className="font-medium">{record.patient_name}</p>
-                                                <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                                                    {record.items.map((item) => `${item.medicine_name} × ${item.quantity}`).join(', ')}
+                                                <p className="text-sm font-medium">
+                                                    {record.patient_name}
                                                 </p>
-                                                <p className="mt-1 text-xs text-muted-foreground">Dr. {record.doctor_name} · {record.dispense_date}</p>
+
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    {record.items
+                                                        .map(
+                                                            (item) =>
+                                                                `${item.medicine_name} × ${item.quantity}`,
+                                                        )
+                                                        .join(', ') || 'No medicine details'}
+                                                </p>
+
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    {formatDoctorName(record.doctor_name)}
+                                                    <span className="mx-2">·</span>
+                                                    {record.dispense_date}
+                                                </p>
                                             </div>
-                                            <p className="shrink-0 text-sm font-semibold tabular-nums">{amount.format(record.total)}</p>
+
+                                            <div className="sm:text-right">
+                                                <p className="text-sm font-medium tabular-nums">
+                                                    {amount.format(record.total)}
+                                                </p>
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    Recorded
+                                                </p>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -110,41 +196,91 @@ export default function Dashboard({ stats, recentRecords, lowStockMedicines }: D
                         </CardContent>
                     </Card>
 
-                    <Card className="rounded-xl shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between">
+                    {/* Low stock */}
+                    <Card className="rounded-lg shadow-none">
+                        <CardHeader className="flex flex-row items-center justify-between border-b px-5 py-4">
                             <div>
-                                <CardTitle>Low stock medicines</CardTitle>
-                                <p className="mt-1 text-sm text-muted-foreground">Items with 10 or fewer units remaining.</p>
+                                <CardTitle className="text-base font-semibold">
+                                    Low Stock Medicines
+                                </CardTitle>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    Medicines with 10 or fewer units
+                                </p>
                             </div>
-                            <Button variant="ghost" size="icon" asChild aria-label="View medicine inventory">
-                                <Link href={route('medicines.index')}><ArrowRight /></Link>
+
+                            <Button variant="ghost" size="icon" asChild>
+                                <Link
+                                    href={route('medicines.index')}
+                                    aria-label="View medicine inventory"
+                                >
+                                    <ArrowRight className="size-4" />
+                                </Link>
                             </Button>
                         </CardHeader>
-                        <CardContent>
+
+                        <CardContent className="p-0">
                             {lowStockMedicines.length === 0 ? (
-                                <div className="rounded-lg border border-dashed bg-muted/30 px-6 py-10 text-center">
+                                <div className="px-5 py-12 text-center">
                                     <Package className="mx-auto size-8 text-muted-foreground" />
-                                    <p className="mt-3 font-medium">Stock levels look good</p>
-                                    <p className="mt-1 text-sm text-muted-foreground">No medicines are currently at or below the low-stock threshold.</p>
+                                    <p className="mt-3 text-sm font-medium">
+                                        No low stock medicines
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        All listed medicines have sufficient stock.
+                                    </p>
                                 </div>
                             ) : (
                                 <div className="divide-y">
                                     {lowStockMedicines.map((medicine) => (
-                                        <div key={medicine.id} className="flex items-center justify-between gap-4 py-3">
+                                        <div
+                                            key={medicine.id}
+                                            className="flex items-center justify-between gap-3 px-5 py-4"
+                                        >
                                             <div className="min-w-0">
-                                                <p className="truncate font-medium">{medicine.medicine_brand}</p>
-                                                <p className="truncate text-sm text-muted-foreground">{medicine.generic_name} · {medicine.medicine_sku}</p>
+                                                <p className="truncate text-sm font-medium">
+                                                    {medicine.medicine_brand}
+                                                </p>
+                                                <p className="truncate text-xs text-muted-foreground">
+                                                    {medicine.generic_name}
+                                                </p>
+                                                <p className="mt-1 text-xs text-muted-foreground">
+                                                    SKU: {medicine.medicine_sku}
+                                                </p>
                                             </div>
-                                            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${medicine.stock_quantity === 0 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-800'}`}>
-                                                {medicine.stock_quantity === 0 ? 'Out of stock' : `${medicine.stock_quantity} left`}
+
+                                            <span
+                                                className={`shrink-0 text-xs font-medium ${
+                                                    medicine.stock_quantity === 0
+                                                        ? 'text-red-600'
+                                                        : 'text-amber-600'
+                                                }`}
+                                            >
+                                                {medicine.stock_quantity === 0
+                                                    ? 'Out of stock'
+                                                    : `${medicine.stock_quantity} left`}
                                             </span>
                                         </div>
                                     ))}
                                 </div>
                             )}
+
+                            {lowStockMedicines.length > 0 && (
+                                <div className="border-t px-5 py-3">
+                                    <Link
+                                        href={route('medicines.index')}
+                                        className="text-sm text-emerald-700 hover:underline"
+                                    >
+                                        Manage inventory
+                                    </Link>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
-                </div>
+                </section>
+
+                <p className="border-t pt-4 text-xs text-muted-foreground">
+                    Pharmacy Prescription Dispensing System
+                </p>
             </main>
         </AppLayout>
     );
