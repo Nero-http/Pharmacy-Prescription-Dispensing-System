@@ -43,7 +43,7 @@ class DemoPharmacySeederTest extends TestCase
             'stock_quantity' => 17,
         ]);
         $this->assertDatabaseCount('medicines', 17);
-        $this->assertDatabaseCount('patients', 20);
+        $this->assertDatabaseCount('patients', 15);
         $this->assertSame(
             0,
             \App\Models\Patient::query()
@@ -51,11 +51,11 @@ class DemoPharmacySeederTest extends TestCase
                 ->count()
         );
         $this->assertDatabaseCount('doctors', 5);
-        $this->assertDatabaseCount('dispense_records', 20);
-        $this->assertDatabaseCount('dispense_items', 40);
+        $this->assertDatabaseCount('dispense_records', 15);
+        $this->assertDatabaseCount('dispense_items', 30);
         $this->assertDatabaseHas('medicines', [
             'medicine_sku' => 'PPDS-DEMO-PAR-500',
-            'stock_quantity' => 77,
+            'stock_quantity' => 86,
         ]);
         $this->assertDatabaseHas('medicines', [
             'medicine_sku' => 'PPDS-DEMO-DIC-50',

@@ -188,11 +188,6 @@ class DemoPharmacySeeder extends Seeder
             'Isabel Flores',
             'Marcus Hill',
             'Priya Shah',
-            'Gabriel Torres',
-            'Naomi Chen',
-            'Ethan Brooks',
-            'Amara Okafor',
-            'Lucas Rivera',
         ];
     }
 
@@ -231,11 +226,6 @@ class DemoPharmacySeeder extends Seeder
             ['date' => '2026-10-23', 'doctor' => 2, 'items' => [['sku' => 'PPDS-DEMO-ATOR-20', 'quantity' => 6], ['sku' => 'PPDS-DEMO-MEF-500', 'quantity' => 4]]],
             ['date' => '2026-10-24', 'doctor' => 3, 'items' => [['sku' => 'PPDS-DEMO-CET-10', 'quantity' => 8], ['sku' => 'PPDS-DEMO-LOP-2', 'quantity' => 3]]],
             ['date' => '2026-10-26', 'doctor' => 4, 'items' => [['sku' => 'PPDS-DEMO-AMX-500', 'quantity' => 9], ['sku' => 'PPDS-DEMO-IBU-400', 'quantity' => 7]]],
-            ['date' => '2026-10-27', 'doctor' => 0, 'items' => [['sku' => 'PPDS-DEMO-MET-500', 'quantity' => 10], ['sku' => 'PPDS-DEMO-VITC-500', 'quantity' => 6]]],
-            ['date' => '2026-10-29', 'doctor' => 1, 'items' => [['sku' => 'PPDS-DEMO-PAR-500', 'quantity' => 9], ['sku' => 'PPDS-DEMO-LOS-50', 'quantity' => 5]]],
-            ['date' => '2026-10-30', 'doctor' => 2, 'items' => [['sku' => 'PPDS-DEMO-AZI-500', 'quantity' => 6], ['sku' => 'PPDS-DEMO-SAL-100', 'quantity' => 5]]],
-            ['date' => '2026-10-31', 'doctor' => 3, 'items' => [['sku' => 'PPDS-DEMO-OME-20', 'quantity' => 8], ['sku' => 'PPDS-DEMO-MEF-500', 'quantity' => 6]]],
-            ['date' => '2026-11-01', 'doctor' => 4, 'items' => [['sku' => 'PPDS-DEMO-LOP-2', 'quantity' => 4], ['sku' => 'PPDS-DEMO-SAL-100', 'quantity' => 6]]],
         ];
     }
 }
