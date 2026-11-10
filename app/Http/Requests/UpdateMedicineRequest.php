@@ -62,7 +62,7 @@ class UpdateMedicineRequest extends FormRequest
                 'required',
                 'numeric',
                 'min:0',
-                'max:99999999.99',
+                'max:10000',
             ],
         ];
     }
@@ -91,7 +91,7 @@ class UpdateMedicineRequest extends FormRequest
             'unit_price.min' =>
                 'Unit price cannot be negative.',
             'unit_price.max' =>
-                'Unit price exceeds the allowed maximum.',
+                'Unit price cannot exceed 10,000.',
         ];
     }
 }

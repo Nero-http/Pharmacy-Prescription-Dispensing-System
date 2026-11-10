@@ -108,7 +108,7 @@ export default function MedicineForm({ medicine }: { medicine: Medicine | null }
                                 </div>
                                 <div className="space-y-2">
                                     <RequiredLabel htmlFor="unit_price">Unit price</RequiredLabel>
-                                    <Input id="unit_price" type="number" inputMode="decimal" min="0" max="99999999.99" step="0.01" required value={data.unit_price} onChange={(event) => setData('unit_price', event.target.value)} />
+                                    <Input id="unit_price" type="number" inputMode="decimal" min="0" max="10000" step="0.01" required value={data.unit_price} onChange={(event) => setData('unit_price', event.target.value)} />
                                     <InputError message={errors.unit_price} />
                                 </div>
                             </div>

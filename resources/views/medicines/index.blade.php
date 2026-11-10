@@ -113,7 +113,7 @@
                                             name="unit_price"
                                             value="{{ $medicine->unit_price }}"
                                             min="0"
-                                            max="99999999.99"
+                                            max="10000"
                                             step="0.01"
                                             required
                                         >

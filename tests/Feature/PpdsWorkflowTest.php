@@ -95,6 +95,49 @@ class PpdsWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_medicine_price_must_be_between_zero_and_ten_thousand(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $medicineData = [
+            'medicine_sku' => 'MED-PRICE',
+            'medicine_brand' => 'Price validation medicine',
+            'generic_name' => 'Generic medicine',
+            'dosage_mg' => 100,
+            'stock_quantity' => 10,
+        ];
+
+        foreach ([-0.01, 10000.01, 99999999999] as $price) {
+            $this->from('/medicines/create')
+                ->post('/medicines', [...$medicineData, 'unit_price' => $price])
+                ->assertRedirect('/medicines/create')
+                ->assertSessionHasErrors('unit_price');
+        }
+
+        $this->post('/medicines', [...$medicineData, 'unit_price' => 10000])
+            ->assertRedirect(route('medicines.index'));
+
+        $medicine = Medicine::firstOrFail();
+        $this->assertSame(10000.0, (float) $medicine->unit_price);
+
+        foreach ([-0.01, 10000.01, 99999999999] as $price) {
+            $this->from(route('medicines.edit', $medicine))
+                ->put(route('medicines.update', $medicine), [
+                    ...$medicineData,
+                    'unit_price' => $price,
+                ])
+                ->assertRedirect(route('medicines.edit', $medicine))
+                ->assertSessionHasErrors('unit_price');
+        }
+
+        $this->put(route('medicines.update', $medicine), [
+            ...$medicineData,
+            'unit_price' => 0,
+        ])->assertRedirect(route('medicines.index'));
+
+        $this->assertSame(0.0, (float) $medicine->fresh()->unit_price);
+    }
+
     public function test_dispensing_creates_an_item_and_deducts_stock(): void
     {
         $this->actingAs(User::factory()->create());
