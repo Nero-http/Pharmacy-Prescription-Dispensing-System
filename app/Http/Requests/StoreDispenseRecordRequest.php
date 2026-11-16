@@ -13,10 +13,18 @@ class StoreDispenseRecordRequest extends FormRequest
 
     public function rules(): array
     {
+        $today = now(config('app.timezone'));
+
         return [
             'patient_id' => ['required', 'integer', 'exists:patients,id'],
             'doctor_id' => ['required', 'integer', 'exists:doctors,id'],
-            'dispense_date' => ['required', 'date'],
+            'dispense_date' => [
+                'bail',
+                'required',
+                'date_format:Y-m-d',
+                'after_or_equal:'.$today->toDateString(),
+                'before_or_equal:'.$today->copy()->addMonthNoOverflow()->toDateString(),
+            ],
             'items' => ['required', 'array', 'min:1'],
             'items.*.medicine_id' => [
                 'required',
@@ -42,7 +50,9 @@ class StoreDispenseRecordRequest extends FormRequest
             'doctor_id.integer' => 'The selected doctor is invalid.',
             'doctor_id.exists' => 'The selected doctor does not exist.',
             'dispense_date.required' => 'The dispensing date is required.',
-            'dispense_date.date' => 'Please enter a valid dispensing date.',
+            'dispense_date.date_format' => 'Please enter a valid dispensing date.',
+            'dispense_date.after_or_equal' => 'The dispensing date must be today or later.',
+            'dispense_date.before_or_equal' => 'The dispensing date must be no more than one calendar month from today.',
             'items.required' => 'Please add at least one medicine.',
             'items.array' => 'The medicines must be submitted as a list.',
             'items.min' => 'Please add at least one medicine.',

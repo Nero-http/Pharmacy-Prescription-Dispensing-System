@@ -49,6 +49,7 @@ class DispenseRecordController extends Controller
             'doctors' => $doctors,
             'medicines' => $medicines,
             'record' => null,
+            ...$this->dispenseDateLimits(),
         ]);
     }
 
@@ -78,6 +79,7 @@ class DispenseRecordController extends Controller
             'doctors' => $doctors,
             'medicines' => $medicines,
             'record' => $dispense_record,
+            ...$this->dispenseDateLimits(),
         ]);
     }
 
@@ -93,5 +95,15 @@ class DispenseRecordController extends Controller
         return redirect()
             ->route('dispense-records.index')
             ->with('success', 'Dispensing record updated successfully.');
+    }
+
+    private function dispenseDateLimits(): array
+    {
+        $today = now(config('app.timezone'));
+
+        return [
+            'minDispenseDate' => $today->toDateString(),
+            'maxDispenseDate' => $today->copy()->addMonthNoOverflow()->toDateString(),
+        ];
     }
 }

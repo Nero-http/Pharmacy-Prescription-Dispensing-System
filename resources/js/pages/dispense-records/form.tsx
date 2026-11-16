@@ -76,20 +76,15 @@ interface DispenseFormProps {
     doctors: Doctor[];
     medicines: Medicine[];
     record: ExistingRecord | null;
-}
-
-function localDate() {
-    const date = new Date();
-    const offset = date.getTimezoneOffset() * 60_000;
-
-    return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+    minDispenseDate: string;
+    maxDispenseDate: string;
 }
 
 function RequiredLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
     return <Label htmlFor={htmlFor}>{children} <span className="text-destructive" aria-label="required">*</span></Label>;
 }
 
-export default function DispenseForm({ patients, doctors, medicines, record }: DispenseFormProps) {
+export default function DispenseForm({ patients, doctors, medicines, record, minDispenseDate, maxDispenseDate }: DispenseFormProps) {
     const editing = record !== null;
     const [patientOptions, setPatientOptions] = useState(patients);
     const [doctorOptions, setDoctorOptions] = useState(doctors);
@@ -105,7 +100,7 @@ export default function DispenseForm({ patients, doctors, medicines, record }: D
     const { data, setData, post, put, processing, errors } = useForm<DispenseFormData>({
         patient_id: record ? String(record.patient_id) : '',
         doctor_id: record ? String(record.doctor_id) : '',
-        dispense_date: record?.dispense_date ?? localDate(),
+        dispense_date: record?.dispense_date ?? minDispenseDate,
         items: record?.items.map((item) => ({
             medicine_id: String(item.medicine_id),
             quantity_dispensed: String(item.quantity_dispensed),
@@ -250,6 +245,10 @@ export default function DispenseForm({ patients, doctors, medicines, record }: D
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
+        if (processing || (data.dispense_date && (data.dispense_date < minDispenseDate || data.dispense_date > maxDispenseDate))) {
+            return;
+        }
+
         if (editing) {
             put(route('dispense-records.update', record.id));
         } else {
@@ -260,6 +259,8 @@ export default function DispenseForm({ patients, doctors, medicines, record }: D
     const title = editing ? 'Edit dispensing record' : 'Dispense medicine';
     const missingPeople = patientOptions.length === 0 || doctorOptions.length === 0;
     const noAvailableMedicine = medicines.every((medicine) => availableStock(medicine) === 0);
+    const dispenseDateOutOfRange = data.dispense_date !== ''
+        && (data.dispense_date < minDispenseDate || data.dispense_date > maxDispenseDate);
 
     return (
         <AppLayout breadcrumbs={[
@@ -338,8 +339,21 @@ export default function DispenseForm({ patients, doctors, medicines, record }: D
                             </div>
                             <div className="space-y-2">
                                 <RequiredLabel htmlFor="dispense_date">Dispensing date</RequiredLabel>
-                                <Input id="dispense_date" type="date" required value={data.dispense_date} onChange={(event) => setData('dispense_date', event.target.value)} />
-                                <InputError message={errors.dispense_date} />
+                                <Input
+                                    id="dispense_date"
+                                    type="date"
+                                    min={minDispenseDate}
+                                    max={maxDispenseDate}
+                                    required
+                                    aria-invalid={dispenseDateOutOfRange || Boolean(errors.dispense_date)}
+                                    value={data.dispense_date}
+                                    onChange={(event) => setData('dispense_date', event.target.value)}
+                                />
+                                <InputError
+                                    message={dispenseDateOutOfRange
+                                        ? `Choose a date between ${minDispenseDate} and ${maxDispenseDate}.`
+                                        : errors.dispense_date}
+                                />
                             </div>
                         </CardContent>
                     </Card>

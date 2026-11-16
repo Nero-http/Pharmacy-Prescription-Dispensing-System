@@ -8,6 +8,7 @@ use App\Models\Medicine;
 use App\Models\Patient;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -141,6 +142,7 @@ class PpdsWorkflowTest extends TestCase
     public function test_dispensing_creates_an_item_and_deducts_stock(): void
     {
         $this->actingAs(User::factory()->create());
+        $today = now(config('app.timezone'))->toDateString();
         $patient = Patient::create(['patient_name' => 'Alex Patient']);
         $doctor = Doctor::create([
             'doctor_license_no' => 'dr-1001',
@@ -162,12 +164,13 @@ class PpdsWorkflowTest extends TestCase
                 ->has('patients', 1)
                 ->has('doctors', 1)
                 ->has('medicines', 1)
+                ->where('minDispenseDate', $today)
             );
 
         $this->post('/dispense-records', [
             'patient_id' => $patient->id,
             'doctor_id' => $doctor->id,
-            'dispense_date' => '2026-11-02',
+            'dispense_date' => $today,
             'items' => [
                 ['medicine_id' => $medicine->id, 'quantity_dispensed' => 4],
             ],
@@ -188,7 +191,7 @@ class PpdsWorkflowTest extends TestCase
         $this->put(route('dispense-records.update', $record), [
             'patient_id' => $patient->id,
             'doctor_id' => $doctor->id,
-            'dispense_date' => '2026-11-02',
+            'dispense_date' => $today,
             'items' => [
                 ['medicine_id' => $medicine->id, 'quantity_dispensed' => 5],
             ],
@@ -202,6 +205,7 @@ class PpdsWorkflowTest extends TestCase
     public function test_dispensing_more_than_available_stock_fails_without_changing_stock(): void
     {
         $this->actingAs(User::factory()->create());
+        $today = now(config('app.timezone'))->toDateString();
         $patient = Patient::create(['patient_name' => 'Sam Patient']);
         $doctor = Doctor::create([
             'doctor_license_no' => 'DR-1002',
@@ -220,7 +224,7 @@ class PpdsWorkflowTest extends TestCase
             ->post('/dispense-records', [
                 'patient_id' => $patient->id,
                 'doctor_id' => $doctor->id,
-                'dispense_date' => '2026-11-02',
+                'dispense_date' => $today,
                 'items' => [
                     ['medicine_id' => $medicine->id, 'quantity_dispensed' => 4],
                 ],
@@ -230,6 +234,85 @@ class PpdsWorkflowTest extends TestCase
 
         $this->assertSame(3, $medicine->fresh()->stock_quantity);
         $this->assertSame(0, DispenseRecord::count());
+    }
+
+    public function test_dispensing_date_is_limited_to_today_through_one_calendar_month(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-16 12:00:00', config('app.timezone')));
+        $this->actingAs(User::factory()->create());
+        $patient = Patient::create(['patient_name' => 'Range Patient']);
+        $doctor = Doctor::create([
+            'doctor_license_no' => 'DR-RANGE',
+            'doctor_name' => 'Range Doctor',
+        ]);
+        $medicine = Medicine::create([
+            'medicine_sku' => 'MED-RANGE',
+            'medicine_brand' => 'Range Medicine',
+            'generic_name' => 'Generic medicine',
+            'dosage_mg' => 100,
+            'stock_quantity' => 10,
+            'unit_price' => 1.00,
+        ]);
+        $validData = [
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'items' => [
+                ['medicine_id' => $medicine->id, 'quantity_dispensed' => 1],
+            ],
+        ];
+
+        $this->get(route('dispense-records.create'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('minDispenseDate', '2026-11-16')
+                ->where('maxDispenseDate', '2026-12-16')
+            );
+
+        $this->post(route('dispense-records.store'), [
+            ...$validData,
+            'dispense_date' => '2026-11-16',
+        ])->assertRedirect(route('dispense-records.index'));
+
+        $record = DispenseRecord::firstOrFail();
+
+        $this->post(route('dispense-records.store'), [
+            ...$validData,
+            'dispense_date' => '2026-12-16',
+        ])->assertRedirect(route('dispense-records.index'));
+
+        foreach (['2026-11-15', '2026-12-17'] as $date) {
+            $this->from(route('dispense-records.create'))
+                ->post(route('dispense-records.store'), [
+                    ...$validData,
+                    'dispense_date' => $date,
+                ])
+                ->assertRedirect(route('dispense-records.create'))
+                ->assertSessionHasErrors('dispense_date');
+        }
+
+        $this->put(route('dispense-records.update', $record), [
+            ...$validData,
+            'dispense_date' => '2026-12-16',
+        ])->assertRedirect(route('dispense-records.index'));
+
+        foreach (['2026-11-15', '2026-12-17'] as $date) {
+            $this->from(route('dispense-records.edit', $record))
+                ->put(route('dispense-records.update', $record), [
+                    ...$validData,
+                    'dispense_date' => $date,
+                ])
+                ->assertRedirect(route('dispense-records.edit', $record))
+                ->assertSessionHasErrors('dispense_date');
+        }
+
+        $this->assertSame('2026-12-16', $record->fresh()->dispense_date->toDateString());
+        $this->assertSame(2, DispenseRecord::count());
+
+        $this->travelTo(Carbon::parse('2026-11-17 12:00:00', config('app.timezone')));
+        $this->get(route('dispense-records.create'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('minDispenseDate', '2026-11-17')
+                ->where('maxDispenseDate', '2026-12-17')
+            );
     }
 
     public function test_patients_and_doctors_can_be_created_and_updated_for_dispensing(): void
