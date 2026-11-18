@@ -350,4 +350,86 @@ class PpdsWorkflowTest extends TestCase
             'doctor_license_no' => 'lic-1002',
         ])->assertUnprocessable()->assertJsonValidationErrors('doctor_license_no');
     }
+
+    public function test_admin_can_soft_delete_a_patient_without_affecting_dispensing_history(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $patient = Patient::create(['patient_name' => 'Archived Patient']);
+        $doctor = Doctor::create([
+            'doctor_license_no' => 'DR-ARCHIVE-PATIENT',
+            'doctor_name' => 'History Doctor',
+        ]);
+        $record = DispenseRecord::create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'dispense_date' => now()->toDateString(),
+        ]);
+
+        $this->deleteJson(route('patients.destroy', $patient))
+            ->assertOk()
+            ->assertJsonPath('message', 'Patient deleted successfully.');
+
+        $this->assertSoftDeleted('patients', ['id' => $patient->id]);
+        $this->assertSame(0, Patient::count());
+        $this->assertDatabaseHas('dispense_records', ['id' => $record->id, 'patient_id' => $patient->id]);
+        $this->assertSame('Archived Patient', $record->fresh()->patient->patient_name);
+
+        $this->get(route('dispense-records.create'))
+            ->assertInertia(fn (Assert $page) => $page->has('patients', 0));
+        $this->get(route('dispense-records.edit', $record))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('patients.0.id', $patient->id)
+                ->where('patients.0.patient_name', 'Archived Patient')
+            );
+    }
+
+    public function test_admin_can_soft_delete_a_doctor_without_affecting_dispensing_history(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $patient = Patient::create(['patient_name' => 'History Patient']);
+        $doctor = Doctor::create([
+            'doctor_license_no' => 'DR-ARCHIVE-DOCTOR',
+            'doctor_name' => 'Archived Doctor',
+        ]);
+        $record = DispenseRecord::create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'dispense_date' => now()->toDateString(),
+        ]);
+
+        $this->deleteJson(route('doctors.destroy', $doctor))
+            ->assertOk()
+            ->assertJsonPath('message', 'Doctor deleted successfully.');
+
+        $this->assertSoftDeleted('doctors', ['id' => $doctor->id]);
+        $this->assertSame(0, Doctor::count());
+        $this->assertDatabaseHas('dispense_records', ['id' => $record->id, 'doctor_id' => $doctor->id]);
+        $this->assertSame('Archived Doctor', $record->fresh()->doctor->doctor_name);
+
+        $this->get(route('dispense-records.create'))
+            ->assertInertia(fn (Assert $page) => $page->has('doctors', 0));
+        $this->get(route('dispense-records.edit', $record))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('doctors.0.id', $doctor->id)
+                ->where('doctors.0.doctor_name', 'Archived Doctor')
+            );
+    }
+
+    public function test_non_admin_users_cannot_delete_patients_or_doctors(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $patient = Patient::create(['patient_name' => 'Protected Patient']);
+        $doctor = Doctor::create([
+            'doctor_license_no' => 'DR-PROTECTED',
+            'doctor_name' => 'Protected Doctor',
+        ]);
+
+        $this->deleteJson(route('patients.destroy', $patient))->assertForbidden();
+        $this->deleteJson(route('doctors.destroy', $doctor))->assertForbidden();
+        $this->deleteJson('/patients/999999')->assertNotFound();
+        $this->deleteJson('/doctors/999999')->assertNotFound();
+
+        $this->assertDatabaseHas('patients', ['id' => $patient->id, 'deleted_at' => null]);
+        $this->assertDatabaseHas('doctors', ['id' => $doctor->id, 'deleted_at' => null]);
+    }
 }

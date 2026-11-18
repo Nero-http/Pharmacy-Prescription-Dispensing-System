@@ -67,9 +67,19 @@ class DispenseRecordController extends Controller
     {
         $dispense_record->load('items.medicine');
 
-        $patients = Patient::orderBy('patient_name')
+        $patients = Patient::withTrashed()
+            ->where(function ($query) use ($dispense_record) {
+                $query->whereNull('deleted_at')
+                    ->orWhere('id', $dispense_record->patient_id);
+            })
+            ->orderBy('patient_name')
             ->get(['id', 'patient_name']);
-        $doctors = Doctor::orderBy('doctor_name')
+        $doctors = Doctor::withTrashed()
+            ->where(function ($query) use ($dispense_record) {
+                $query->whereNull('deleted_at')
+                    ->orWhere('id', $dispense_record->doctor_id);
+            })
+            ->orderBy('doctor_name')
             ->get(['id', 'doctor_license_no', 'doctor_name']);
         $medicines = Medicine::orderBy('medicine_brand')
             ->get(['id', 'medicine_sku', 'medicine_brand', 'generic_name', 'dosage_mg', 'stock_quantity', 'unit_price']);

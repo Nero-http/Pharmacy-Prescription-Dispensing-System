@@ -39,9 +39,9 @@ Route::middleware('auth')->group(function () {
     Route::resource('dispense-records', DispenseRecordController::class)
         ->only(['index', 'create', 'store', 'edit', 'update']);
     Route::resource('patients', PatientController::class)
-        ->only(['store', 'update']);
+        ->only(['store', 'update', 'destroy']);
     Route::resource('doctors', DoctorController::class)
-        ->only(['store', 'update']);
+        ->only(['store', 'update', 'destroy']);
 
 });
 

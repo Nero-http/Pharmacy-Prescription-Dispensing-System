@@ -19,9 +19,10 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { AlertCircle, ArrowLeft, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
+import type { SharedData } from '@/types';
 
 interface Patient {
     id: number;
@@ -80,12 +81,18 @@ interface DispenseFormProps {
     maxDispenseDate: string;
 }
 
+type DeleteTarget =
+    | { type: 'patient'; id: number; name: string }
+    | { type: 'doctor'; id: number; name: string };
+
 function RequiredLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
     return <Label htmlFor={htmlFor}>{children} <span className="text-destructive" aria-label="required">*</span></Label>;
 }
 
 export default function DispenseForm({ patients, doctors, medicines, record, minDispenseDate, maxDispenseDate }: DispenseFormProps) {
     const editing = record !== null;
+    const { auth } = usePage<SharedData>().props;
+    const isAdmin = Boolean(auth.user?.is_admin);
     const [patientOptions, setPatientOptions] = useState(patients);
     const [doctorOptions, setDoctorOptions] = useState(doctors);
     const [patientDialogOpen, setPatientDialogOpen] = useState(false);
@@ -97,6 +104,10 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
     const [doctorLicense, setDoctorLicense] = useState('');
     const [personErrors, setPersonErrors] = useState<Record<string, string>>({});
     const [personProcessing, setPersonProcessing] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+    const [deleteProcessing, setDeleteProcessing] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
+    const [personNotice, setPersonNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const { data, setData, post, put, processing, errors } = useForm<DispenseFormData>({
         patient_id: record ? String(record.patient_id) : '',
         doctor_id: record ? String(record.doctor_id) : '',
@@ -162,6 +173,54 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
         setDoctorLicense(doctor.doctor_license_no);
         setPersonErrors({});
         setDoctorDialogOpen(true);
+    }
+
+    async function deletePerson() {
+        if (!deleteTarget || !isAdmin || deleteProcessing) {
+            return;
+        }
+
+        setDeleteProcessing(true);
+        setDeleteError(null);
+        const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
+        const endpoint = deleteTarget.type === 'patient'
+            ? route('patients.destroy', deleteTarget.id)
+            : route('doctors.destroy', deleteTarget.id);
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'DELETE',
+                headers: {
+                    Accept: 'application/json',
+                    ...(token ? { 'X-CSRF-TOKEN': token } : {}),
+                },
+            });
+            const result: { message?: string } = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                setDeleteError(result.message ?? 'Unable to delete this record. Please try again.');
+                return;
+            }
+
+            if (deleteTarget.type === 'patient') {
+                setPatientOptions((current) => current.filter((patient) => patient.id !== deleteTarget.id));
+                if (data.patient_id === String(deleteTarget.id)) {
+                    setData('patient_id', '');
+                }
+            } else {
+                setDoctorOptions((current) => current.filter((doctor) => doctor.id !== deleteTarget.id));
+                if (data.doctor_id === String(deleteTarget.id)) {
+                    setData('doctor_id', '');
+                }
+            }
+
+            setPersonNotice({ type: 'success', message: result.message ?? 'Record deleted successfully.' });
+            setDeleteTarget(null);
+        } catch {
+            setDeleteError('Unable to delete this record. Please try again.');
+        } finally {
+            setDeleteProcessing(false);
+        }
     }
 
     async function savePerson(url: string, method: 'POST' | 'PUT', payload: Record<string, string>, type: 'patient' | 'doctor') {
@@ -278,6 +337,15 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                     <p className="mt-1 text-sm text-muted-foreground">Record patient and prescriber details, then select medicines and quantities.</p>
                 </div>
 
+                {personNotice && (
+                    <div
+                        role={personNotice.type === 'error' ? 'alert' : 'status'}
+                        className={`rounded-lg border px-4 py-3 text-sm font-medium ${personNotice.type === 'error' ? 'border-red-200 bg-red-50 text-red-900' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}
+                    >
+                        {personNotice.message}
+                    </div>
+                )}
+
                 {(missingPeople || noAvailableMedicine) && (
                     <div role="status" className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
                         <AlertCircle className="mt-0.5 size-5 shrink-0" />
@@ -294,7 +362,7 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                             <CardTitle>Prescription details</CardTitle>
                             <CardDescription>Choose the patient and prescribing doctor for this record.</CardDescription>
                         </CardHeader>
-                        <CardContent className="grid gap-5 md:grid-cols-3">
+                        <CardContent className="grid gap-5 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_14rem]">
                             <div className="space-y-2">
                                 <RequiredLabel htmlFor="patient_id">Patient</RequiredLabel>
                                 <div className="flex gap-2">
@@ -311,6 +379,26 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                                         <span className="sr-only">Edit selected patient</span>
                                     </Button>
                                     <Button type="button" variant="outline" onClick={openNewPatient}><Plus /> Add</Button>
+                                    {isAdmin && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-destructive hover:text-destructive"
+                                            onClick={() => {
+                                                const patient = patientOptions.find((option) => String(option.id) === data.patient_id);
+                                                if (patient) {
+                                                    setDeleteError(null);
+                                                    setDeleteTarget({ type: 'patient', id: patient.id, name: patient.patient_name });
+                                                }
+                                            }}
+                                            disabled={!data.patient_id || deleteProcessing}
+                                            title="Delete selected patient"
+                                        >
+                                            <Trash2 />
+                                            <span className="sr-only">Delete selected patient</span>
+                                        </Button>
+                                    )}
                                 </div>
                                 <InputError message={errors.patient_id} />
                             </div>
@@ -334,10 +422,30 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                                         <span className="sr-only">Edit selected doctor</span>
                                     </Button>
                                     <Button type="button" variant="outline" onClick={openNewDoctor}><Plus /> Add</Button>
+                                    {isAdmin && (
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            className="text-destructive hover:text-destructive"
+                                            onClick={() => {
+                                                const doctor = doctorOptions.find((option) => String(option.id) === data.doctor_id);
+                                                if (doctor) {
+                                                    setDeleteError(null);
+                                                    setDeleteTarget({ type: 'doctor', id: doctor.id, name: doctor.doctor_name });
+                                                }
+                                            }}
+                                            disabled={!data.doctor_id || deleteProcessing}
+                                            title="Delete selected doctor"
+                                        >
+                                            <Trash2 />
+                                            <span className="sr-only">Delete selected doctor</span>
+                                        </Button>
+                                    )}
                                 </div>
                                 <InputError message={errors.doctor_id} />
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                                 <RequiredLabel htmlFor="dispense_date">Dispensing date</RequiredLabel>
                                 <Input
                                     id="dispense_date"
@@ -531,6 +639,37 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+            <Dialog
+                open={deleteTarget !== null}
+                onOpenChange={(open) => {
+                    if (!open && !deleteProcessing) {
+                        setDeleteTarget(null);
+                        setDeleteError(null);
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete {deleteTarget?.type ?? 'record'}?</DialogTitle>
+                        <DialogDescription>
+                            This will remove <span className="font-medium text-foreground">{deleteTarget?.name}</span> from active options. Existing dispensing records will be preserved.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {deleteError && (
+                        <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+                            {deleteError}
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteProcessing}>
+                            Cancel
+                        </Button>
+                        <Button type="button" variant="destructive" onClick={() => void deletePerson()} disabled={deleteProcessing}>
+                            <Trash2 /> {deleteProcessing ? 'Deleting…' : 'Delete'}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </AppLayout>
