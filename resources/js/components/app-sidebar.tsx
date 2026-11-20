@@ -3,7 +3,7 @@ import { NavUser } from '@/components/nav-user';
 import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { ClipboardList, LayoutDashboard, PackagePlus, Pill, PlusCircle } from 'lucide-react';
+import { ClipboardList, LayoutDashboard, PackagePlus, Pill, PlusCircle, Stethoscope, Users } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -16,6 +16,16 @@ const mainNavItems: NavItem[] = [
         title: 'Medicine Management',
         url: route('medicines.index'),
         icon: Pill,
+    },
+    {
+        title: 'Patient Management',
+        url: route('patients.index'),
+        icon: Users,
+    },
+    {
+        title: 'Doctor Management',
+        url: route('doctors.index'),
+        icon: Stethoscope,
     },
     {
         title: 'Dispensing Records',

@@ -19,10 +19,9 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { AlertCircle, ArrowLeft, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
-import type { SharedData } from '@/types';
 
 interface Patient {
     id: number;
@@ -81,18 +80,23 @@ interface DispenseFormProps {
     maxDispenseDate: string;
 }
 
-type DeleteTarget =
-    | { type: 'patient'; id: number; name: string }
-    | { type: 'doctor'; id: number; name: string };
-
 function RequiredLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
-    return <Label htmlFor={htmlFor}>{children} <span className="text-destructive" aria-label="required">*</span></Label>;
+    return (
+        <Label htmlFor={htmlFor}>
+            {children} <span className="text-destructive" aria-label="required">*</span>
+        </Label>
+    );
 }
 
-export default function DispenseForm({ patients, doctors, medicines, record, minDispenseDate, maxDispenseDate }: DispenseFormProps) {
+export default function DispenseForm({
+    patients,
+    doctors,
+    medicines,
+    record,
+    minDispenseDate,
+    maxDispenseDate,
+}: DispenseFormProps) {
     const editing = record !== null;
-    const { auth } = usePage<SharedData>().props;
-    const isAdmin = Boolean(auth.user?.is_admin);
     const [patientOptions, setPatientOptions] = useState(patients);
     const [doctorOptions, setDoctorOptions] = useState(doctors);
     const [patientDialogOpen, setPatientDialogOpen] = useState(false);
@@ -104,40 +108,48 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
     const [doctorLicense, setDoctorLicense] = useState('');
     const [personErrors, setPersonErrors] = useState<Record<string, string>>({});
     const [personProcessing, setPersonProcessing] = useState(false);
-    const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
-    const [deleteProcessing, setDeleteProcessing] = useState(false);
-    const [deleteError, setDeleteError] = useState<string | null>(null);
-    const [personNotice, setPersonNotice] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
     const { data, setData, post, put, processing, errors } = useForm<DispenseFormData>({
         patient_id: record ? String(record.patient_id) : '',
         doctor_id: record ? String(record.doctor_id) : '',
         dispense_date: record?.dispense_date ?? minDispenseDate,
-        items: record?.items.map((item) => ({
-            medicine_id: String(item.medicine_id),
-            quantity_dispensed: String(item.quantity_dispensed),
-        })) ?? [{ medicine_id: '', quantity_dispensed: '1' }],
+        items:
+            record?.items.map((item) => ({
+                medicine_id: String(item.medicine_id),
+                quantity_dispensed: String(item.quantity_dispensed),
+            })) ?? [{ medicine_id: '', quantity_dispensed: '1' }],
     });
 
-    const total = useMemo(() => data.items.reduce((sum, item) => {
-        const medicine = medicines.find((option) => String(option.id) === item.medicine_id);
-        const quantity = Number(item.quantity_dispensed);
-
-        return sum + (medicine && Number.isFinite(quantity) ? Number(medicine.unit_price) * quantity : 0);
-    }, 0), [data.items, medicines]);
+    const total = useMemo(
+        () =>
+            data.items.reduce((sum, item) => {
+                const medicine = medicines.find((m) => String(m.id) === item.medicine_id);
+                const quantity = Number(item.quantity_dispensed);
+                return sum + (medicine && Number.isFinite(quantity) ? Number(medicine.unit_price) * quantity : 0);
+            }, 0),
+        [data.items, medicines],
+    );
 
     function updateItem(index: number, patch: Partial<ItemFormData>) {
-        setData('items', data.items.map((item, itemIndex) => itemIndex === index ? {
-            ...item,
-            medicine_id: patch.medicine_id ?? item.medicine_id,
-            quantity_dispensed: patch.quantity_dispensed ?? item.quantity_dispensed,
-        } : item));
+        setData(
+            'items',
+            data.items.map((item, i) =>
+                i === index
+                    ? {
+                          ...item,
+                          medicine_id: patch.medicine_id ?? item.medicine_id,
+                          quantity_dispensed: patch.quantity_dispensed ?? item.quantity_dispensed,
+                      }
+                    : item,
+            ),
+        );
     }
 
     function availableStock(medicine: Medicine) {
-        const previousQuantity = record?.items
-            .filter((item) => item.medicine_id === medicine.id)
-            .reduce((sum, item) => sum + item.quantity_dispensed, 0) ?? 0;
-
+        const previousQuantity =
+            record?.items
+                .filter((item) => item.medicine_id === medicine.id)
+                .reduce((sum, item) => sum + item.quantity_dispensed, 0) ?? 0;
         return medicine.stock_quantity + previousQuantity;
     }
 
@@ -175,55 +187,12 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
         setDoctorDialogOpen(true);
     }
 
-    async function deletePerson() {
-        if (!deleteTarget || !isAdmin || deleteProcessing) {
-            return;
-        }
-
-        setDeleteProcessing(true);
-        setDeleteError(null);
-        const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
-        const endpoint = deleteTarget.type === 'patient'
-            ? route('patients.destroy', deleteTarget.id)
-            : route('doctors.destroy', deleteTarget.id);
-
-        try {
-            const response = await fetch(endpoint, {
-                method: 'DELETE',
-                headers: {
-                    Accept: 'application/json',
-                    ...(token ? { 'X-CSRF-TOKEN': token } : {}),
-                },
-            });
-            const result: { message?: string } = await response.json().catch(() => ({}));
-
-            if (!response.ok) {
-                setDeleteError(result.message ?? 'Unable to delete this record. Please try again.');
-                return;
-            }
-
-            if (deleteTarget.type === 'patient') {
-                setPatientOptions((current) => current.filter((patient) => patient.id !== deleteTarget.id));
-                if (data.patient_id === String(deleteTarget.id)) {
-                    setData('patient_id', '');
-                }
-            } else {
-                setDoctorOptions((current) => current.filter((doctor) => doctor.id !== deleteTarget.id));
-                if (data.doctor_id === String(deleteTarget.id)) {
-                    setData('doctor_id', '');
-                }
-            }
-
-            setPersonNotice({ type: 'success', message: result.message ?? 'Record deleted successfully.' });
-            setDeleteTarget(null);
-        } catch {
-            setDeleteError('Unable to delete this record. Please try again.');
-        } finally {
-            setDeleteProcessing(false);
-        }
-    }
-
-    async function savePerson(url: string, method: 'POST' | 'PUT', payload: Record<string, string>, type: 'patient' | 'doctor') {
+    async function savePerson(
+        url: string,
+        method: 'POST' | 'PUT',
+        payload: Record<string, string>,
+        type: 'patient' | 'doctor',
+    ) {
         setPersonProcessing(true);
         setPersonErrors({});
         const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
@@ -243,14 +212,20 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
             if (!response.ok) {
                 const validationErrors = result.errors ?? {};
                 const hasValidationErrors = Object.keys(validationErrors).length > 0;
-                setPersonErrors(Object.fromEntries(
-                    Object.entries(validationErrors).map(([key, value]) => [key, Array.isArray(value) ? value[0] : String(value)]),
-                ) as Record<string, string>);
+                setPersonErrors(
+                    Object.fromEntries(
+                        Object.entries(validationErrors).map(([key, value]) => [
+                            key,
+                            Array.isArray(value) ? value[0] : String(value),
+                        ]),
+                    ) as Record<string, string>,
+                );
                 if (!hasValidationErrors) {
                     setPersonErrors({
-                        general: typeof result.message === 'string'
-                            ? result.message
-                            : 'Unable to save the record. Please try again.',
+                        general:
+                            typeof result.message === 'string'
+                                ? result.message
+                                : 'Unable to save the record. Please try again.',
                     });
                 }
                 return;
@@ -260,7 +235,9 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                 const patient = result.patient as Patient;
                 setPatientOptions((current) => {
                     const exists = current.some((item) => item.id === patient.id);
-                    const next = exists ? current.map((item) => item.id === patient.id ? patient : item) : [...current, patient];
+                    const next = exists
+                        ? current.map((item) => (item.id === patient.id ? patient : item))
+                        : [...current, patient];
                     return next.sort((a, b) => a.patient_name.localeCompare(b.patient_name));
                 });
                 setData('patient_id', String(patient.id));
@@ -269,7 +246,9 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                 const doctor = result.doctor as Doctor;
                 setDoctorOptions((current) => {
                     const exists = current.some((item) => item.id === doctor.id);
-                    const next = exists ? current.map((item) => item.id === doctor.id ? doctor : item) : [...current, doctor];
+                    const next = exists
+                        ? current.map((item) => (item.id === doctor.id ? doctor : item))
+                        : [...current, doctor];
                     return next.sort((a, b) => a.doctor_name.localeCompare(b.doctor_name));
                 });
                 setData('doctor_id', String(doctor.id));
@@ -304,7 +283,11 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
 
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (processing || (data.dispense_date && (data.dispense_date < minDispenseDate || data.dispense_date > maxDispenseDate))) {
+        if (
+            processing ||
+            (data.dispense_date &&
+                (data.dispense_date < minDispenseDate || data.dispense_date > maxDispenseDate))
+        ) {
             return;
         }
 
@@ -318,40 +301,48 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
     const title = editing ? 'Edit dispensing record' : 'Dispense medicine';
     const missingPeople = patientOptions.length === 0 || doctorOptions.length === 0;
     const noAvailableMedicine = medicines.every((medicine) => availableStock(medicine) === 0);
-    const dispenseDateOutOfRange = data.dispense_date !== ''
-        && (data.dispense_date < minDispenseDate || data.dispense_date > maxDispenseDate);
+    const dispenseDateOutOfRange =
+        data.dispense_date !== '' &&
+        (data.dispense_date < minDispenseDate || data.dispense_date > maxDispenseDate);
 
     return (
-        <AppLayout breadcrumbs={[
-            { title: 'Dispensing Records', href: route('dispense-records.index') },
-            { title, href: editing ? route('dispense-records.edit', record.id) : route('dispense-records.create') },
-        ]}>
+        <AppLayout
+            breadcrumbs={[
+                { title: 'Dispensing Records', href: route('dispense-records.index') },
+                {
+                    title,
+                    href: editing
+                        ? route('dispense-records.edit', record.id)
+                        : route('dispense-records.create'),
+                },
+            ]}
+        >
             <Head title={title} />
             <main className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
                 <div>
                     <Button variant="ghost" size="sm" className="-ml-3 mb-3" asChild>
-                        <Link href={route('dispense-records.index')}><ArrowLeft /> Back to dispensing records</Link>
+                        <Link href={route('dispense-records.index')}>
+                            <ArrowLeft /> Back to dispensing records
+                        </Link>
                     </Button>
                     <p className="text-sm font-medium text-primary">Prescription dispensing</p>
                     <h1 className="mt-1 text-2xl font-semibold tracking-tight">{title}</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">Record patient and prescriber details, then select medicines and quantities.</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Record patient and prescriber details, then select medicines and quantities.
+                    </p>
                 </div>
 
-                {personNotice && (
-                    <div
-                        role={personNotice.type === 'error' ? 'alert' : 'status'}
-                        className={`rounded-lg border px-4 py-3 text-sm font-medium ${personNotice.type === 'error' ? 'border-red-200 bg-red-50 text-red-900' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}
-                    >
-                        {personNotice.message}
-                    </div>
-                )}
-
                 {(missingPeople || noAvailableMedicine) && (
-                    <div role="status" className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                    <div
+                        role="status"
+                        className="flex gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950"
+                    >
                         <AlertCircle className="mt-0.5 size-5 shrink-0" />
                         <p>
-                            {missingPeople && 'Patient and doctor options must be present in the database before dispensing. '}
-                            {noAvailableMedicine && 'There are no medicines with available stock to dispense.'}
+                            {missingPeople &&
+                                'At least one patient and one doctor must be registered before dispensing. '}
+                            {noAvailableMedicine &&
+                                'There are no medicines with available stock to dispense.'}
                         </p>
                     </div>
                 )}
@@ -360,53 +351,71 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                     <Card className="rounded-xl shadow-sm">
                         <CardHeader>
                             <CardTitle>Prescription details</CardTitle>
-                            <CardDescription>Choose the patient and prescribing doctor for this record.</CardDescription>
+                            <CardDescription>
+                                Choose the patient and prescribing doctor for this record.
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-5 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_14rem]">
+                            {/* Patient */}
                             <div className="space-y-2">
                                 <RequiredLabel htmlFor="patient_id">Patient</RequiredLabel>
                                 <div className="flex gap-2">
-                                    <Select value={data.patient_id} onValueChange={(value) => setData('patient_id', value)}>
-                                        <SelectTrigger id="patient_id" aria-label="Patient" className="min-w-0 flex-1">
+                                    <Select
+                                        value={data.patient_id}
+                                        onValueChange={(value) => setData('patient_id', value)}
+                                    >
+                                        <SelectTrigger
+                                            id="patient_id"
+                                            aria-label="Patient"
+                                            className="min-w-0 flex-1"
+                                        >
                                             <SelectValue placeholder="Select a patient" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {patientOptions.map((patient) => <SelectItem key={patient.id} value={String(patient.id)}>{patient.patient_name}</SelectItem>)}
+                                            {patientOptions.map((patient) => (
+                                                <SelectItem key={patient.id} value={String(patient.id)}>
+                                                    {patient.patient_name}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
-                                    <Button type="button" variant="outline" size="icon" onClick={() => openEditPatient(patientOptions.find((patient) => String(patient.id) === data.patient_id)!)} disabled={!data.patient_id} title="Edit selected patient">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() =>
+                                            openEditPatient(
+                                                patientOptions.find(
+                                                    (p) => String(p.id) === data.patient_id,
+                                                )!,
+                                            )
+                                        }
+                                        disabled={!data.patient_id}
+                                        title="Edit selected patient"
+                                    >
                                         <Pencil />
                                         <span className="sr-only">Edit selected patient</span>
                                     </Button>
-                                    <Button type="button" variant="outline" onClick={openNewPatient}><Plus /> Add</Button>
-                                    {isAdmin && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="text-destructive hover:text-destructive"
-                                            onClick={() => {
-                                                const patient = patientOptions.find((option) => String(option.id) === data.patient_id);
-                                                if (patient) {
-                                                    setDeleteError(null);
-                                                    setDeleteTarget({ type: 'patient', id: patient.id, name: patient.patient_name });
-                                                }
-                                            }}
-                                            disabled={!data.patient_id || deleteProcessing}
-                                            title="Delete selected patient"
-                                        >
-                                            <Trash2 />
-                                            <span className="sr-only">Delete selected patient</span>
-                                        </Button>
-                                    )}
+                                    <Button type="button" variant="outline" onClick={openNewPatient}>
+                                        <Plus /> Add
+                                    </Button>
                                 </div>
                                 <InputError message={errors.patient_id} />
                             </div>
+
+                            {/* Doctor */}
                             <div className="space-y-2">
                                 <RequiredLabel htmlFor="doctor_id">Doctor</RequiredLabel>
                                 <div className="flex gap-2">
-                                    <Select value={data.doctor_id} onValueChange={(value) => setData('doctor_id', value)}>
-                                        <SelectTrigger id="doctor_id" aria-label="Doctor" className="min-w-0 flex-1">
+                                    <Select
+                                        value={data.doctor_id}
+                                        onValueChange={(value) => setData('doctor_id', value)}
+                                    >
+                                        <SelectTrigger
+                                            id="doctor_id"
+                                            aria-label="Doctor"
+                                            className="min-w-0 flex-1"
+                                        >
                                             <SelectValue placeholder="Select a doctor" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -417,34 +426,31 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    <Button type="button" variant="outline" size="icon" onClick={() => openEditDoctor(doctorOptions.find((doctor) => String(doctor.id) === data.doctor_id)!)} disabled={!data.doctor_id} title="Edit selected doctor">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() =>
+                                            openEditDoctor(
+                                                doctorOptions.find(
+                                                    (d) => String(d.id) === data.doctor_id,
+                                                )!,
+                                            )
+                                        }
+                                        disabled={!data.doctor_id}
+                                        title="Edit selected doctor"
+                                    >
                                         <Pencil />
                                         <span className="sr-only">Edit selected doctor</span>
                                     </Button>
-                                    <Button type="button" variant="outline" onClick={openNewDoctor}><Plus /> Add</Button>
-                                    {isAdmin && (
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="icon"
-                                            className="text-destructive hover:text-destructive"
-                                            onClick={() => {
-                                                const doctor = doctorOptions.find((option) => String(option.id) === data.doctor_id);
-                                                if (doctor) {
-                                                    setDeleteError(null);
-                                                    setDeleteTarget({ type: 'doctor', id: doctor.id, name: doctor.doctor_name });
-                                                }
-                                            }}
-                                            disabled={!data.doctor_id || deleteProcessing}
-                                            title="Delete selected doctor"
-                                        >
-                                            <Trash2 />
-                                            <span className="sr-only">Delete selected doctor</span>
-                                        </Button>
-                                    )}
+                                    <Button type="button" variant="outline" onClick={openNewDoctor}>
+                                        <Plus /> Add
+                                    </Button>
                                 </div>
                                 <InputError message={errors.doctor_id} />
                             </div>
+
+                            {/* Date */}
                             <div className="space-y-1.5">
                                 <RequiredLabel htmlFor="dispense_date">Dispensing date</RequiredLabel>
                                 <Input
@@ -453,14 +459,20 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                                     min={minDispenseDate}
                                     max={maxDispenseDate}
                                     required
-                                    aria-invalid={dispenseDateOutOfRange || Boolean(errors.dispense_date)}
+                                    aria-invalid={
+                                        dispenseDateOutOfRange || Boolean(errors.dispense_date)
+                                    }
                                     value={data.dispense_date}
-                                    onChange={(event) => setData('dispense_date', event.target.value)}
+                                    onChange={(event) =>
+                                        setData('dispense_date', event.target.value)
+                                    }
                                 />
                                 <InputError
-                                    message={dispenseDateOutOfRange
-                                        ? `Choose a date between ${minDispenseDate} and ${maxDispenseDate}.`
-                                        : errors.dispense_date}
+                                    message={
+                                        dispenseDateOutOfRange
+                                            ? `Choose a date between ${minDispenseDate} and ${maxDispenseDate}.`
+                                            : errors.dispense_date
+                                    }
                                 />
                             </div>
                         </CardContent>
@@ -469,74 +481,143 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                     <Card className="rounded-xl shadow-sm">
                         <CardHeader>
                             <CardTitle>Medicines</CardTitle>
-                            <CardDescription>Available stock is checked again by the server before stock is deducted.</CardDescription>
+                            <CardDescription>
+                                Available stock is checked again by the server before stock is deducted.
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-5">
                             {data.items.map((item, index) => {
-                                const selectedMedicine = medicines.find((medicine) => String(medicine.id) === item.medicine_id);
-                                const available = selectedMedicine ? availableStock(selectedMedicine) : 0;
+                                const selectedMedicine = medicines.find(
+                                    (m) => String(m.id) === item.medicine_id,
+                                );
+                                const available = selectedMedicine
+                                    ? availableStock(selectedMedicine)
+                                    : 0;
                                 const otherSelectedIds = data.items
-                                    .filter((_, itemIndex) => itemIndex !== index)
-                                    .map((otherItem) => otherItem.medicine_id);
+                                    .filter((_, i) => i !== index)
+                                    .map((other) => other.medicine_id);
 
                                 return (
-                                    <div key={index} className="rounded-lg border bg-background p-4 md:p-5">
+                                    <div
+                                        key={index}
+                                        className="rounded-lg border bg-background p-4 md:p-5"
+                                    >
                                         <div className="mb-4 flex items-center justify-between">
-                                            <p className="text-sm font-semibold">Medicine {index + 1}</p>
+                                            <p className="text-sm font-semibold">
+                                                Medicine {index + 1}
+                                            </p>
                                             {data.items.length > 1 && (
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => setData('items', data.items.filter((_, itemIndex) => itemIndex !== index))}>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        setData(
+                                                            'items',
+                                                            data.items.filter((_, i) => i !== index),
+                                                        )
+                                                    }
+                                                >
                                                     <Trash2 /> Remove
                                                 </Button>
                                             )}
                                         </div>
                                         <div className="grid gap-5 md:grid-cols-[1fr_180px]">
                                             <div className="space-y-2">
-                                                <RequiredLabel htmlFor={`medicine-${index}`}>Medicine</RequiredLabel>
-                                                <Select value={item.medicine_id} onValueChange={(value) => updateItem(index, { medicine_id: value, quantity_dispensed: item.quantity_dispensed || '1' })}>
-                                                    <SelectTrigger id={`medicine-${index}`} aria-label={`Medicine ${index + 1}`}>
+                                                <RequiredLabel htmlFor={`medicine-${index}`}>
+                                                    Medicine
+                                                </RequiredLabel>
+                                                <Select
+                                                    value={item.medicine_id}
+                                                    onValueChange={(value) =>
+                                                        updateItem(index, {
+                                                            medicine_id: value,
+                                                            quantity_dispensed:
+                                                                item.quantity_dispensed || '1',
+                                                        })
+                                                    }
+                                                >
+                                                    <SelectTrigger
+                                                        id={`medicine-${index}`}
+                                                        aria-label={`Medicine ${index + 1}`}
+                                                    >
                                                         <SelectValue placeholder="Select a medicine" />
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {medicines.map((medicine) => {
                                                             const stock = availableStock(medicine);
-                                                            const disabled = stock < 1 || otherSelectedIds.includes(String(medicine.id));
-
+                                                            const disabled =
+                                                                stock < 1 ||
+                                                                otherSelectedIds.includes(
+                                                                    String(medicine.id),
+                                                                );
                                                             return (
-                                                                <SelectItem key={medicine.id} value={String(medicine.id)} disabled={disabled}>
-                                                                    {medicine.medicine_brand} · {medicine.dosage_mg} mg · {stock} available
+                                                                <SelectItem
+                                                                    key={medicine.id}
+                                                                    value={String(medicine.id)}
+                                                                    disabled={disabled}
+                                                                >
+                                                                    {medicine.medicine_brand} ·{' '}
+                                                                    {medicine.dosage_mg} mg · {stock}{' '}
+                                                                    available
                                                                 </SelectItem>
                                                             );
                                                         })}
                                                     </SelectContent>
                                                 </Select>
-                                                <InputError message={fieldError(`items.${index}.medicine_id`)} />
+                                                <InputError
+                                                    message={fieldError(
+                                                        `items.${index}.medicine_id`,
+                                                    )}
+                                                />
                                             </div>
                                             <div className="space-y-2">
-                                                <RequiredLabel htmlFor={`quantity-${index}`}>Quantity</RequiredLabel>
+                                                <RequiredLabel htmlFor={`quantity-${index}`}>
+                                                    Quantity
+                                                </RequiredLabel>
                                                 <Input
                                                     id={`quantity-${index}`}
                                                     type="number"
                                                     inputMode="numeric"
                                                     min="1"
-                                                    max={selectedMedicine ? available : undefined}
+                                                    max={
+                                                        selectedMedicine ? available : undefined
+                                                    }
                                                     step="1"
                                                     required
                                                     value={item.quantity_dispensed}
-                                                    onChange={(event) => updateItem(index, { quantity_dispensed: event.target.value })}
+                                                    onChange={(event) =>
+                                                        updateItem(index, {
+                                                            quantity_dispensed: event.target.value,
+                                                        })
+                                                    }
                                                 />
                                                 <p className="text-xs text-muted-foreground">
-                                                    {selectedMedicine ? `${available} unit${available === 1 ? '' : 's'} available` : 'Select a medicine to view stock.'}
+                                                    {selectedMedicine
+                                                        ? `${available} unit${available === 1 ? '' : 's'} available`
+                                                        : 'Select a medicine to view stock.'}
                                                 </p>
-                                                <InputError message={fieldError(`items.${index}.quantity_dispensed`)} />
+                                                <InputError
+                                                    message={fieldError(
+                                                        `items.${index}.quantity_dispensed`,
+                                                    )}
+                                                />
                                             </div>
                                         </div>
                                         {selectedMedicine && (
                                             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2.5 text-sm">
                                                 <span className="text-muted-foreground">
-                                                    {selectedMedicine.generic_name} · SKU {selectedMedicine.medicine_sku} · {Number(selectedMedicine.unit_price).toFixed(2)} per unit
+                                                    {selectedMedicine.generic_name} · SKU{' '}
+                                                    {selectedMedicine.medicine_sku} ·{' '}
+                                                    {Number(selectedMedicine.unit_price).toFixed(2)}{' '}
+                                                    per unit
                                                 </span>
                                                 <span className="font-semibold tabular-nums">
-                                                    Line total: {(Number(selectedMedicine.unit_price) * Number(item.quantity_dispensed || 0)).toFixed(2)}
+                                                    Line total:{' '}
+                                                    {(
+                                                        Number(selectedMedicine.unit_price) *
+                                                        Number(item.quantity_dispensed || 0)
+                                                    ).toFixed(2)}
                                                 </span>
                                             </div>
                                         )}
@@ -545,7 +626,16 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                             })}
 
                             <InputError message={errors.items} />
-                            <Button type="button" variant="outline" onClick={() => setData('items', [...data.items, { medicine_id: '', quantity_dispensed: '1' }])}>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                    setData('items', [
+                                        ...data.items,
+                                        { medicine_id: '', quantity_dispensed: '1' },
+                                    ])
+                                }
+                            >
                                 <Plus /> Add another medicine
                             </Button>
                         </CardContent>
@@ -555,27 +645,48 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                         <CardContent className="flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <p className="text-sm text-muted-foreground">Estimated total</p>
-                                <p className="text-2xl font-semibold tabular-nums">{total.toFixed(2)}</p>
+                                <p className="text-2xl font-semibold tabular-nums">
+                                    {total.toFixed(2)}
+                                </p>
                             </div>
-                            <p className="max-w-md text-xs text-muted-foreground">The final total uses the current medicine prices at the time this record is saved.</p>
+                            <p className="max-w-md text-xs text-muted-foreground">
+                                The final total uses the current medicine prices at the time this
+                                record is saved.
+                            </p>
                         </CardContent>
                     </Card>
 
                     <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                        <Button type="button" variant="outline" asChild><Link href={route('dispense-records.index')}>Cancel</Link></Button>
-                        <Button type="submit" disabled={processing || missingPeople || noAvailableMedicine}>
-                            <Save /> {processing ? 'Saving…' : editing ? 'Save record' : 'Complete dispensing'}
+                        <Button type="button" variant="outline" asChild>
+                            <Link href={route('dispense-records.index')}>Cancel</Link>
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={processing || missingPeople || noAvailableMedicine}
+                        >
+                            <Save />{' '}
+                            {processing
+                                ? 'Saving…'
+                                : editing
+                                  ? 'Save record'
+                                  : 'Complete dispensing'}
                         </Button>
                     </div>
                 </form>
             </main>
+
+            {/* Add / Edit Patient dialog */}
             <Dialog open={patientDialogOpen} onOpenChange={setPatientDialogOpen}>
                 <DialogContent>
                     <form onSubmit={submitPatient} className="space-y-5">
                         <DialogHeader>
-                            <DialogTitle>{editingPatient ? 'Edit patient' : 'Add new patient'}</DialogTitle>
+                            <DialogTitle>
+                                {editingPatient ? 'Edit patient' : 'Add new patient'}
+                            </DialogTitle>
                             <DialogDescription>
-                                {editingPatient ? 'Update this patient without affecting existing dispensing records.' : 'Register a patient and select it for this dispensing record.'}
+                                {editingPatient
+                                    ? 'Update this patient without affecting existing dispensing records.'
+                                    : 'Register a patient and select them for this dispensing record.'}
                             </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-2">
@@ -591,7 +702,13 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                         </div>
                         <InputError message={personErrors.general} />
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setPatientDialogOpen(false)}>Cancel</Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setPatientDialogOpen(false)}
+                            >
+                                Cancel
+                            </Button>
                             <Button type="submit" disabled={personProcessing}>
                                 <Save /> {personProcessing ? 'Saving…' : 'Save patient'}
                             </Button>
@@ -599,18 +716,26 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                     </form>
                 </DialogContent>
             </Dialog>
+
+            {/* Add / Edit Doctor dialog */}
             <Dialog open={doctorDialogOpen} onOpenChange={setDoctorDialogOpen}>
                 <DialogContent>
                     <form onSubmit={submitDoctor} className="space-y-5">
                         <DialogHeader>
-                            <DialogTitle>{editingDoctor ? 'Edit doctor' : 'Add new doctor'}</DialogTitle>
+                            <DialogTitle>
+                                {editingDoctor ? 'Edit doctor' : 'Add new doctor'}
+                            </DialogTitle>
                             <DialogDescription>
-                                {editingDoctor ? 'Update this doctor without affecting existing dispensing records.' : 'Register a doctor and select it for this dispensing record.'}
+                                {editingDoctor
+                                    ? 'Update this doctor without affecting existing dispensing records.'
+                                    : 'Register a doctor and select them for this dispensing record.'}
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4">
                             <div className="space-y-2">
-                                <RequiredLabel htmlFor="dialog_doctor_name">Doctor name</RequiredLabel>
+                                <RequiredLabel htmlFor="dialog_doctor_name">
+                                    Doctor name
+                                </RequiredLabel>
                                 <Input
                                     id="dialog_doctor_name"
                                     value={doctorName}
@@ -621,55 +746,34 @@ export default function DispenseForm({ patients, doctors, medicines, record, min
                                 <InputError message={personErrors.doctor_name} />
                             </div>
                             <div className="space-y-2">
-                                <RequiredLabel htmlFor="dialog_doctor_license">License number</RequiredLabel>
+                                <RequiredLabel htmlFor="dialog_doctor_license">
+                                    License number
+                                </RequiredLabel>
                                 <Input
                                     id="dialog_doctor_license"
                                     value={doctorLicense}
-                                    onChange={(event) => setDoctorLicense(event.target.value)}
+                                    onChange={(event) =>
+                                        setDoctorLicense(event.target.value.toUpperCase())
+                                    }
                                     maxLength={255}
                                 />
                                 <InputError message={personErrors.doctor_license_no} />
                             </div>
                             <InputError message={personErrors.general} />
-                            </div>
+                        </div>
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setDoctorDialogOpen(false)}>Cancel</Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setDoctorDialogOpen(false)}
+                            >
+                                Cancel
+                            </Button>
                             <Button type="submit" disabled={personProcessing}>
                                 <Save /> {personProcessing ? 'Saving…' : 'Save doctor'}
                             </Button>
                         </DialogFooter>
                     </form>
-                </DialogContent>
-            </Dialog>
-            <Dialog
-                open={deleteTarget !== null}
-                onOpenChange={(open) => {
-                    if (!open && !deleteProcessing) {
-                        setDeleteTarget(null);
-                        setDeleteError(null);
-                    }
-                }}
-            >
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Delete {deleteTarget?.type ?? 'record'}?</DialogTitle>
-                        <DialogDescription>
-                            This will remove <span className="font-medium text-foreground">{deleteTarget?.name}</span> from active options. Existing dispensing records will be preserved.
-                        </DialogDescription>
-                    </DialogHeader>
-                    {deleteError && (
-                        <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
-                            {deleteError}
-                        </div>
-                    )}
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteProcessing}>
-                            Cancel
-                        </Button>
-                        <Button type="button" variant="destructive" onClick={() => void deletePerson()} disabled={deleteProcessing}>
-                            <Trash2 /> {deleteProcessing ? 'Deleting…' : 'Delete'}
-                        </Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </AppLayout>

@@ -37,11 +37,11 @@ Route::middleware('auth')->group(function () {
         ->only(['index', 'create', 'store', 'edit', 'update']);
 
     Route::resource('dispense-records', DispenseRecordController::class)
-        ->only(['index', 'create', 'store', 'edit', 'update']);
+        ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
     Route::resource('patients', PatientController::class)
-        ->only(['store', 'update', 'destroy']);
+        ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
     Route::resource('doctors', DoctorController::class)
-        ->only(['store', 'update', 'destroy']);
+        ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
 
 });
 
