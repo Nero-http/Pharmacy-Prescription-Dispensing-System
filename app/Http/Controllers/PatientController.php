@@ -23,7 +23,7 @@ class PatientController extends Controller
         $patients = Patient::query()
             ->when($search !== '', fn ($q) => $q->where('patient_name', 'like', '%' . $search . '%'))
             ->orderBy('patient_name')
-            ->paginate(15)
+            ->paginate(5)
             ->withQueryString();
 
         return Inertia::render('patients/index', [
@@ -74,9 +74,16 @@ class PatientController extends Controller
             ->with('success', 'Patient updated successfully.');
     }
 
-    public function destroy(Patient $patient): RedirectResponse
+    public function destroy(Request $request, Patient $patient): JsonResponse|RedirectResponse
     {
         $patient->delete();
+
+        // JSON callers (e.g. the inline dispense-record form) expect a JSON body.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Patient deleted successfully.',
+            ]);
+        }
 
         return redirect()
             ->route('patients.index')

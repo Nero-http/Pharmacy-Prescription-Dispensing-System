@@ -3,16 +3,20 @@
 namespace App\Services;
 
 use App\Models\Doctor;
-use App\Models\Patient;
 use App\Models\Medicine;
+use App\Models\Patient;
 use App\Models\DispenseRecord;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class DomainService
 {
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
     /**
-     * Sanitize string inputs.
+     * Trim and strip HTML tags from every string value in the array.
      */
     private function sanitize(array $data): array
     {
@@ -25,20 +29,25 @@ class DomainService
         return $data;
     }
 
+    // -------------------------------------------------------------------------
+    // Patients
+    // -------------------------------------------------------------------------
+
     public function createPatient(array $data): Patient
     {
-        $data = $this->sanitize($data);
-
-        return Patient::create($data);
+        return Patient::create($this->sanitize($data));
     }
 
     public function updatePatient(Patient $patient, array $data): Patient
     {
-        $data = $this->sanitize($data);
-        $patient->update($data);
+        $patient->update($this->sanitize($data));
 
         return $patient->refresh();
     }
+
+    // -------------------------------------------------------------------------
+    // Doctors
+    // -------------------------------------------------------------------------
 
     public function createDoctor(array $data): Doctor
     {
@@ -57,138 +66,62 @@ class DomainService
         return $doctor->refresh();
     }
 
-    /**
-     * Create a new medicine.
-     */
+    // -------------------------------------------------------------------------
+    // Medicines
+    // -------------------------------------------------------------------------
+
     public function createMedicine(array $data): Medicine
     {
         $data = $this->sanitize($data);
-
         $data['medicine_sku'] = strtoupper($data['medicine_sku']);
 
         return Medicine::create($data);
     }
 
-    /**
-     * Update an existing medicine.
-     */
-    public function updateMedicine(
-        Medicine $medicine,
-        array $data
-    ): Medicine {
+    public function updateMedicine(Medicine $medicine, array $data): Medicine
+    {
         $data = $this->sanitize($data);
-
         $data['medicine_sku'] = strtoupper($data['medicine_sku']);
 
         return DB::transaction(function () use ($medicine, $data) {
-            $lockedMedicine = Medicine::query()
-                ->lockForUpdate()
-                ->findOrFail($medicine->id);
+            $locked = Medicine::query()->lockForUpdate()->findOrFail($medicine->id);
+            $locked->update($data);
 
-            $lockedMedicine->update($data);
-
-            return $lockedMedicine->refresh();
+            return $locked->refresh();
         });
     }
 
+    // -------------------------------------------------------------------------
+    // Dispensing records
+    // -------------------------------------------------------------------------
+
     /**
-     * Create a dispensing record and deduct medicine stock.
+     * Create a new dispensing record and deduct stock.
+     *
+     * All stock deductions happen inside a single DB transaction with
+     * row-level locks to prevent race conditions with concurrent requests.
      */
     public function createDispenseRecord(array $data): DispenseRecord
     {
         $data = $this->sanitize($data);
 
         return DB::transaction(function () use ($data) {
-            $doctor = Doctor::query()
-                ->lockForUpdate()
-                ->findOrFail($data['doctor_id']);
-
-            $doctor->doctor_license_no = strtoupper(
-                trim($doctor->doctor_license_no)
-            );
-
+            // Uppercase and persist the doctor's licence number while holding
+            // an exclusive row lock so no other writer can touch it.
+            $doctor = Doctor::query()->lockForUpdate()->findOrFail($data['doctor_id']);
+            $doctor->doctor_license_no = strtoupper(trim($doctor->doctor_license_no));
             $doctor->save();
 
             $record = DispenseRecord::create([
-                'patient_id' => $data['patient_id'],
-                'doctor_id' => $doctor->id,
+                'patient_id'   => $data['patient_id'],
+                'doctor_id'    => $doctor->id,
                 'dispense_date' => $data['dispense_date'],
             ]);
 
-            $items = collect($data['items'])
-                ->sortBy('medicine_id')
-                ->values();
-
-            foreach ($items as $item) {
-                $medicine = Medicine::query()
-                    ->lockForUpdate()
-                    ->findOrFail($item['medicine_id']);
-
-                $quantity = (int) $item['quantity_dispensed'];
-
-                if ($medicine->stock_quantity < $quantity) {
-                    throw ValidationException::withMessages([
-                        'items' => [
-                            "Insufficient stock for {$medicine->medicine_brand}. "
-                            . "Available: {$medicine->stock_quantity}.",
-                        ],
-                    ]);
-                }
-
-                $unitPrice = (float) $medicine->unit_price;
-                $totalPrice = round($unitPrice * $quantity, 2);
-
-                $record->items()->create([
-                    'medicine_id' => $medicine->id,
-                    'quantity_dispensed' => $quantity,
-                    'unit_price' => $unitPrice,
-                    'total_price' => $totalPrice,
-                ]);
-
-                $medicine->decrement(
-                    'stock_quantity',
-                    $quantity
-                );
-            }
-
-            return $record->load([
-                'patient',
-                'doctor',
-                'items.medicine',
-            ]);
-        });
-    }
-
-    /**
-     * Update a dispensing record and recalculate stock.
-     */
-    public function updateDispenseRecord(
-        int $id,
-        array $data
-    ): DispenseRecord {
-        $data = $this->sanitize($data);
-
-        return DB::transaction(function () use ($id, $data) {
-            $record = DispenseRecord::query()
-                ->lockForUpdate()
-                ->with('items')
-                ->findOrFail($id);
-
-            $doctor = Doctor::query()
-                ->lockForUpdate()
-                ->findOrFail($data['doctor_id']);
-
-            $doctor->doctor_license_no = strtoupper(
-                trim($doctor->doctor_license_no)
-            );
-
-            $doctor->save();
-
-            // Lock all affected medicine rows in a consistent order.
+            // Lock all requested medicine rows in ascending id order to
+            // prevent deadlocks between concurrent dispensing requests.
             $medicineIds = collect($data['items'])
                 ->pluck('medicine_id')
-                ->merge($record->items->pluck('medicine_id'))
-                ->unique()
                 ->sort()
                 ->values();
 
@@ -199,49 +132,12 @@ class DomainService
                 ->get()
                 ->keyBy('id');
 
-            // Restore stock from the previous dispensing record.
-            foreach ($record->items as $oldItem) {
-                $medicine = $medicines->get(
-                    $oldItem->medicine_id
-                );
+            foreach (collect($data['items'])->sortBy('medicine_id') as $item) {
+                $medicine = $medicines->get($item['medicine_id']);
 
-                if (!$medicine) {
+                if (! $medicine) {
                     throw ValidationException::withMessages([
-                        'items' => [
-                            'A previously dispensed medicine no longer exists.',
-                        ],
-                    ]);
-                }
-
-                $medicine->stock_quantity +=
-                    $oldItem->quantity_dispensed;
-
-                $medicine->save();
-            }
-
-            $record->update([
-                'patient_id' => $data['patient_id'],
-                'doctor_id' => $doctor->id,
-                'dispense_date' => $data['dispense_date'],
-            ]);
-
-            // Replace the previous items with the new items.
-            $record->items()->delete();
-
-            $items = collect($data['items'])
-                ->sortBy('medicine_id')
-                ->values();
-
-            foreach ($items as $item) {
-                $medicine = $medicines->get(
-                    $item['medicine_id']
-                );
-
-                if (!$medicine) {
-                    throw ValidationException::withMessages([
-                        'items' => [
-                            'The selected medicine could not be found.',
-                        ],
+                        'items' => ['The selected medicine could not be found.'],
                     ]);
                 }
 
@@ -256,25 +152,126 @@ class DomainService
                     ]);
                 }
 
-                $unitPrice = (float) $medicine->unit_price;
+                $unitPrice  = (float) $medicine->unit_price;
                 $totalPrice = round($unitPrice * $quantity, 2);
 
                 $record->items()->create([
-                    'medicine_id' => $medicine->id,
+                    'medicine_id'        => $medicine->id,
                     'quantity_dispensed' => $quantity,
-                    'unit_price' => $unitPrice,
-                    'total_price' => $totalPrice,
+                    'unit_price'         => $unitPrice,
+                    'total_price'        => $totalPrice,
+                ]);
+
+                $medicine->decrement('stock_quantity', $quantity);
+            }
+
+            return $record->load(['patient', 'doctor', 'items.medicine']);
+        });
+    }
+
+    /**
+     * Update an existing dispensing record.
+     *
+     * Stock from the old items is restored first, then new items are deducted.
+     * Uses withTrashed() when restoring stock so that medicine rows that have
+     * been soft-deleted (e.g. discontinued stock) don't cause a 404 error.
+     */
+    public function updateDispenseRecord(int $id, array $data): DispenseRecord
+    {
+        $data = $this->sanitize($data);
+
+        return DB::transaction(function () use ($id, $data) {
+            $record = DispenseRecord::query()
+                ->lockForUpdate()
+                ->with('items')
+                ->findOrFail($id);
+
+            $doctor = Doctor::query()->lockForUpdate()->findOrFail($data['doctor_id']);
+            $doctor->doctor_license_no = strtoupper(trim($doctor->doctor_license_no));
+            $doctor->save();
+
+            // Collect all medicine IDs involved (old + new) and lock them in
+            // ascending ID order to prevent deadlocks.
+            $allMedicineIds = collect($data['items'])
+                ->pluck('medicine_id')
+                ->merge($record->items->pluck('medicine_id'))
+                ->unique()
+                ->sort()
+                ->values();
+            $previousMedicineIds = $record->items->pluck('medicine_id');
+
+            $medicines = Medicine::withTrashed()
+                ->whereIn('id', $allMedicineIds)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
+
+            // ── 1. Restore stock from previous items ───────────────────────
+            foreach ($record->items as $oldItem) {
+                $medicine = $medicines->get($oldItem->medicine_id);
+
+                if (! $medicine) {
+                    throw ValidationException::withMessages([
+                        'items' => ['A previously dispensed medicine no longer exists.'],
+                    ]);
+                }
+
+                $medicine->stock_quantity += $oldItem->quantity_dispensed;
+                $medicine->save();
+            }
+
+            // ── 2. Update the record header ────────────────────────────────
+            $record->update([
+                'patient_id'   => $data['patient_id'],
+                'doctor_id'    => $doctor->id,
+                'dispense_date' => $data['dispense_date'],
+            ]);
+
+            // ── 3. Replace items and deduct stock ──────────────────────────
+            $record->items()->delete();
+
+            foreach (collect($data['items'])->sortBy('medicine_id') as $item) {
+                $medicine = $medicines->get($item['medicine_id']);
+
+                if (! $medicine) {
+                    throw ValidationException::withMessages([
+                        'items' => ['The selected medicine could not be found.'],
+                    ]);
+                }
+
+                if ($medicine->trashed() && ! $previousMedicineIds->contains($medicine->id)) {
+                    throw ValidationException::withMessages([
+                        'items' => ['Archived medicines cannot be added to a dispensing record.'],
+                    ]);
+                }
+
+                $quantity = (int) $item['quantity_dispensed'];
+
+                if ($medicine->stock_quantity < $quantity) {
+                    throw ValidationException::withMessages([
+                        'items' => [
+                            "Insufficient stock for {$medicine->medicine_brand}. "
+                            . "Available: {$medicine->stock_quantity}.",
+                        ],
+                    ]);
+                }
+
+                $unitPrice  = (float) $medicine->unit_price;
+                $totalPrice = round($unitPrice * $quantity, 2);
+
+                $record->items()->create([
+                    'medicine_id'        => $medicine->id,
+                    'quantity_dispensed' => $quantity,
+                    'unit_price'         => $unitPrice,
+                    'total_price'        => $totalPrice,
                 ]);
 
                 $medicine->stock_quantity -= $quantity;
                 $medicine->save();
             }
 
-            return $record->load([
-                'patient',
-                'doctor',
-                'items.medicine',
-            ]);
+            return $record->load(['patient', 'doctor', 'items.medicine']);
         });
     }
 }

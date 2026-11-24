@@ -20,7 +20,16 @@ import {
 } from '@/components/ui/select';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { AlertCircle, ArrowLeft, Pencil, Plus, Save, Trash2 } from 'lucide-react';
+import {
+    AlertCircle,
+    ArrowLeft,
+    Check,
+    ChevronsUpDown,
+    Pencil,
+    Plus,
+    Save,
+    Trash2,
+} from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 
 interface Patient {
@@ -40,8 +49,10 @@ interface Medicine {
     medicine_brand: string;
     generic_name: string;
     dosage_mg: number;
+    dosage_form: string | null;
     stock_quantity: number;
     unit_price: string;
+    deleted_at?: string | null;
 }
 
 interface ExistingItem {
@@ -88,6 +99,178 @@ function RequiredLabel({ htmlFor, children }: { htmlFor: string; children: React
     );
 }
 
+interface PersonOption {
+    id: number;
+    label: string;
+    description?: string;
+}
+
+interface PersonComboboxProps {
+    id: string;
+    label: string;
+    value: string;
+    options: PersonOption[];
+    placeholder: string;
+    emptyMessage: string;
+    invalid: boolean;
+    onValueChange: (value: string) => void;
+}
+
+function PersonCombobox({
+    id,
+    label,
+    value,
+    options,
+    placeholder,
+    emptyMessage,
+    invalid,
+    onValueChange,
+}: PersonComboboxProps) {
+    const [query, setQuery] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+    const [isTyping, setIsTyping] = useState(false);
+    const [activeIndex, setActiveIndex] = useState(0);
+    const selectedOption = options.find((option) => String(option.id) === value);
+    const inputValue = isOpen
+        ? isTyping
+            ? query
+            : selectedOption?.label ?? ''
+        : selectedOption?.label ?? query;
+    const searchQuery = isOpen && isTyping ? query.trim().toLocaleLowerCase() : '';
+    const filteredOptions = options.filter((option) =>
+        `${option.label} ${option.description ?? ''}`
+            .toLocaleLowerCase()
+            .includes(searchQuery),
+    );
+    const listboxId = `${id}-options`;
+
+    function selectOption(option: PersonOption) {
+        onValueChange(String(option.id));
+        setQuery('');
+        setIsTyping(false);
+        setIsOpen(false);
+        setActiveIndex(0);
+    }
+
+    function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            if (!isOpen) {
+                setIsOpen(true);
+                setActiveIndex(0);
+            } else {
+                setActiveIndex((index) => Math.min(index + 1, filteredOptions.length - 1));
+            }
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (!isOpen) {
+                setIsOpen(true);
+                setActiveIndex(0);
+            } else {
+                setActiveIndex((index) => Math.max(index - 1, 0));
+            }
+        } else if (event.key === 'Enter' && isOpen) {
+            event.preventDefault();
+            const option = filteredOptions[activeIndex];
+            if (option) selectOption(option);
+        } else if (event.key === 'Escape') {
+            setIsOpen(false);
+        }
+    }
+
+    return (
+        <div className="relative min-w-0 flex-1">
+            <Input
+                id={id}
+                role="combobox"
+                aria-autocomplete="list"
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
+                aria-controls={listboxId}
+                aria-activedescendant={
+                    isOpen && filteredOptions[activeIndex]
+                        ? `${id}-option-${filteredOptions[activeIndex].id}`
+                        : undefined
+                }
+                aria-invalid={invalid}
+                autoComplete="off"
+                placeholder={placeholder}
+                value={inputValue}
+                className="pr-9"
+                onFocus={() => {
+                    setIsOpen(true);
+                    setIsTyping(false);
+                    setQuery('');
+                    setActiveIndex(0);
+                }}
+                onBlur={() => setIsOpen(false)}
+                onChange={(event) => {
+                    setQuery(event.target.value);
+                    setIsTyping(true);
+                    setIsOpen(true);
+                    setActiveIndex(0);
+                    onValueChange('');
+                }}
+                onKeyDown={handleKeyDown}
+            />
+            <ChevronsUpDown
+                aria-hidden="true"
+                className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            {isOpen && (
+                <div
+                    id={listboxId}
+                    role="listbox"
+                    aria-label={`${label} options`}
+                    className="absolute z-50 mt-1 max-h-60 w-full overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+                >
+                    {filteredOptions.length > 0 ? (
+                        filteredOptions.map((option, index) => {
+                            const selected = String(option.id) === value;
+                            return (
+                                <button
+                                    key={option.id}
+                                    id={`${id}-option-${option.id}`}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={selected}
+                                    tabIndex={-1}
+                                    className={`flex w-full items-center gap-2 rounded-sm px-2 py-2 text-left text-sm ${
+                                        index === activeIndex
+                                            ? 'bg-accent text-accent-foreground'
+                                            : ''
+                                    }`}
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onMouseMove={() => setActiveIndex(index)}
+                                    onClick={() => selectOption(option)}
+                                >
+                                    <span className="min-w-0 flex-1 truncate">
+                                        {option.label}
+                                        {option.description && (
+                                            <span className="ml-2 text-muted-foreground">
+                                                {option.description}
+                                            </span>
+                                        )}
+                                    </span>
+                                    {selected && (
+                                        <Check aria-hidden="true" className="size-4 shrink-0" />
+                                    )}
+                                </button>
+                            );
+                        })
+                    ) : (
+                        <p role="status" className="px-2 py-3 text-center text-sm text-muted-foreground">
+                            {searchQuery
+                                ? `No ${label.toLocaleLowerCase()} match "${query}".`
+                                : emptyMessage}
+                        </p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function DispenseForm({
     patients,
     doctors,
@@ -108,10 +291,33 @@ export default function DispenseForm({
     const [doctorLicense, setDoctorLicense] = useState('');
     const [personErrors, setPersonErrors] = useState<Record<string, string>>({});
     const [personProcessing, setPersonProcessing] = useState(false);
+    const patientComboboxOptions = useMemo(
+        () =>
+            patientOptions.map((patient) => ({
+                id: patient.id,
+                label: patient.patient_name,
+            })),
+        [patientOptions],
+    );
+    const doctorComboboxOptions = useMemo(
+        () =>
+            doctorOptions.map((doctor) => ({
+                id: doctor.id,
+                label: doctor.doctor_name,
+                description: doctor.doctor_license_no,
+            })),
+        [doctorOptions],
+    );
 
     const { data, setData, post, put, processing, errors } = useForm<DispenseFormData>({
-        patient_id: record ? String(record.patient_id) : '',
-        doctor_id: record ? String(record.doctor_id) : '',
+        patient_id:
+            record && patients.some((patient) => patient.id === record.patient_id)
+                ? String(record.patient_id)
+                : '',
+        doctor_id:
+            record && doctors.some((doctor) => doctor.id === record.doctor_id)
+                ? String(record.doctor_id)
+                : '',
         dispense_date: record?.dispense_date ?? minDispenseDate,
         items:
             record?.items.map((item) => ({
@@ -318,7 +524,7 @@ export default function DispenseForm({
             ]}
         >
             <Head title={title} />
-            <main className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">
+            <main className="ppds-page ppds-dispense-page">
                 <div>
                     <Button variant="ghost" size="sm" className="-ml-3 mb-3" asChild>
                         <Link href={route('dispense-records.index')}>
@@ -360,36 +566,26 @@ export default function DispenseForm({
                             <div className="space-y-2">
                                 <RequiredLabel htmlFor="patient_id">Patient</RequiredLabel>
                                 <div className="flex gap-2">
-                                    <Select
+                                    <PersonCombobox
+                                        id="patient_id"
+                                        label="Patient"
                                         value={data.patient_id}
+                                        options={patientComboboxOptions}
+                                        placeholder="Search patients..."
+                                        emptyMessage="No patients are available."
+                                        invalid={Boolean(errors.patient_id)}
                                         onValueChange={(value) => setData('patient_id', value)}
-                                    >
-                                        <SelectTrigger
-                                            id="patient_id"
-                                            aria-label="Patient"
-                                            className="min-w-0 flex-1"
-                                        >
-                                            <SelectValue placeholder="Select a patient" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {patientOptions.map((patient) => (
-                                                <SelectItem key={patient.id} value={String(patient.id)}>
-                                                    {patient.patient_name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    />
                                     <Button
                                         type="button"
                                         variant="outline"
                                         size="icon"
-                                        onClick={() =>
-                                            openEditPatient(
-                                                patientOptions.find(
-                                                    (p) => String(p.id) === data.patient_id,
-                                                )!,
-                                            )
-                                        }
+                                        onClick={() => {
+                                            const patient = patientOptions.find(
+                                                (option) => String(option.id) === data.patient_id,
+                                            );
+                                            if (patient) openEditPatient(patient);
+                                        }}
                                         disabled={!data.patient_id}
                                         title="Edit selected patient"
                                     >
@@ -407,36 +603,26 @@ export default function DispenseForm({
                             <div className="space-y-2">
                                 <RequiredLabel htmlFor="doctor_id">Doctor</RequiredLabel>
                                 <div className="flex gap-2">
-                                    <Select
+                                    <PersonCombobox
+                                        id="doctor_id"
+                                        label="Doctor"
                                         value={data.doctor_id}
+                                        options={doctorComboboxOptions}
+                                        placeholder="Search doctors..."
+                                        emptyMessage="No doctors are available."
+                                        invalid={Boolean(errors.doctor_id)}
                                         onValueChange={(value) => setData('doctor_id', value)}
-                                    >
-                                        <SelectTrigger
-                                            id="doctor_id"
-                                            aria-label="Doctor"
-                                            className="min-w-0 flex-1"
-                                        >
-                                            <SelectValue placeholder="Select a doctor" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {doctorOptions.map((doctor) => (
-                                                <SelectItem key={doctor.id} value={String(doctor.id)}>
-                                                    {doctor.doctor_name} · {doctor.doctor_license_no}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    />
                                     <Button
                                         type="button"
                                         variant="outline"
                                         size="icon"
-                                        onClick={() =>
-                                            openEditDoctor(
-                                                doctorOptions.find(
-                                                    (d) => String(d.id) === data.doctor_id,
-                                                )!,
-                                            )
-                                        }
+                                        onClick={() => {
+                                            const doctor = doctorOptions.find(
+                                                (option) => String(option.id) === data.doctor_id,
+                                            );
+                                            if (doctor) openEditDoctor(doctor);
+                                        }}
                                         disabled={!data.doctor_id}
                                         title="Edit selected doctor"
                                     >
@@ -456,6 +642,7 @@ export default function DispenseForm({
                                 <Input
                                     id="dispense_date"
                                     type="date"
+                                    className="dispense-date-input w-fit max-w-full"
                                     min={minDispenseDate}
                                     max={maxDispenseDate}
                                     required
@@ -550,16 +737,28 @@ export default function DispenseForm({
                                                                 stock < 1 ||
                                                                 otherSelectedIds.includes(
                                                                     String(medicine.id),
-                                                                );
+                                                                ) ||
+                                                                (Boolean(medicine.deleted_at) &&
+                                                                    !record?.items.some(
+                                                                        (existingItem) =>
+                                                                            existingItem.medicine_id ===
+                                                                            medicine.id,
+                                                                    ));
                                                             return (
                                                                 <SelectItem
                                                                     key={medicine.id}
                                                                     value={String(medicine.id)}
                                                                     disabled={disabled}
                                                                 >
-                                                                    {medicine.medicine_brand} ·{' '}
-                                                                    {medicine.dosage_mg} mg · {stock}{' '}
-                                                                    available
+                                                                    {medicine.medicine_brand}
+                                                                    {medicine.dosage_form
+                                                                        ? ` · ${medicine.dosage_form}`
+                                                                        : ''}{' '}
+                                                                    · {medicine.dosage_mg} mg ·{' '}
+                                                                    {stock} available
+                                                                    {medicine.deleted_at
+                                                                        ? ' · Archived'
+                                                                        : ''}
                                                                 </SelectItem>
                                                             );
                                                         })}
@@ -607,7 +806,11 @@ export default function DispenseForm({
                                         {selectedMedicine && (
                                             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2.5 text-sm">
                                                 <span className="text-muted-foreground">
-                                                    {selectedMedicine.generic_name} · SKU{' '}
+                                                    {selectedMedicine.generic_name}
+                                                    {selectedMedicine.dosage_form
+                                                        ? ` · ${selectedMedicine.dosage_form}`
+                                                        : ''}{' '}
+                                                    · {selectedMedicine.dosage_mg} mg · SKU{' '}
                                                     {selectedMedicine.medicine_sku} ·{' '}
                                                     {Number(selectedMedicine.unit_price).toFixed(2)}{' '}
                                                     per unit

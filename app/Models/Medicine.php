@@ -4,14 +4,18 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Medicine extends Model
 {
+    use SoftDeletes;
+
     protected $fillable = [
         'medicine_sku',
         'medicine_brand',
         'generic_name',
         'dosage_mg',
+        'dosage_form',
         'stock_quantity',
         'unit_price',
     ];
@@ -19,9 +23,9 @@ class Medicine extends Model
     protected function casts(): array
     {
         return [
-            'dosage_mg' => 'integer',
+            'dosage_mg'      => 'integer',
             'stock_quantity' => 'integer',
-            'unit_price' => 'decimal:2',
+            'unit_price'     => 'decimal:2',
         ];
     }
 

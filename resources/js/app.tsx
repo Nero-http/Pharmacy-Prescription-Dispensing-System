@@ -10,7 +10,7 @@ declare global {
     const route: typeof routeFn;
 }
 
-const appName = import.meta.env.VITE_APP_NAME || 'PPDS Pharmacy';
+const appName = 'PPDS';
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,
@@ -21,7 +21,7 @@ createInertiaApp({
         root.render(<App {...props} />);
     },
     progress: {
-        color: '#4B5563',
+        color: '#245C49',
     },
 });
 

@@ -43,6 +43,12 @@ class StoreMedicineRequest extends FormRequest
                 'max:100000',
             ],
 
+            'dosage_form' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+
             'stock_quantity' => [
                 'required',
                 'integer',
@@ -62,28 +68,17 @@ class StoreMedicineRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'medicine_sku.required' =>
-                'The medicine SKU is required.',
-            'medicine_sku.regex' =>
-                'SKU may contain only letters, numbers, hyphens, and underscores.',
-            'medicine_sku.unique' =>
-                'This medicine SKU already exists.',
-            'medicine_brand.regex' =>
-                'The medicine brand contains unsupported characters.',
-            'generic_name.regex' =>
-                'The generic name contains unsupported characters.',
-            'dosage_mg.min' =>
-                'Dosage must be at least 1 mg.',
-            'dosage_mg.max' =>
-                'Dosage cannot exceed 100,000 mg.',
-            'stock_quantity.min' =>
-                'Stock quantity cannot be negative.',
-            'stock_quantity.max' =>
-                'Stock quantity cannot exceed 100,000 units.',
-            'unit_price.min' =>
-                'Unit price cannot be negative.',
-            'unit_price.max' =>
-                'Unit price cannot exceed 10,000.',
+            'medicine_sku.required'    => 'The medicine SKU is required.',
+            'medicine_sku.regex'       => 'SKU may only contain letters, numbers, hyphens, and underscores.',
+            'medicine_sku.unique'      => 'This medicine SKU already exists.',
+            'medicine_brand.regex'     => 'The medicine brand contains unsupported characters.',
+            'generic_name.regex'       => 'The generic name contains unsupported characters.',
+            'dosage_mg.min'            => 'Dosage must be at least 1 mg.',
+            'dosage_mg.max'            => 'Dosage cannot exceed 100,000 mg.',
+            'stock_quantity.min'       => 'Stock quantity cannot be negative.',
+            'stock_quantity.max'       => 'Stock quantity cannot exceed 100,000 units.',
+            'unit_price.min'           => 'Unit price cannot be negative.',
+            'unit_price.max'           => 'Unit price cannot exceed 10,000.',
         ];
     }
 }

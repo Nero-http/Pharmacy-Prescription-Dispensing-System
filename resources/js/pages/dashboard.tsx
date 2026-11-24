@@ -1,20 +1,6 @@
-
 import { Button } from '@/components/ui/button';
-import {
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link } from '@inertiajs/react';
-import {
-    ArrowRight,
-    ClipboardList,
-    Package,
-    Pill,
-    Plus,
-} from 'lucide-react';
 
 interface DashboardProps {
     stats: {
@@ -22,6 +8,8 @@ interface DashboardProps {
         total_stock: number;
         low_stock_medicines: number;
         total_dispensing_records: number;
+        total_patients: number;
+        total_doctors: number;
     };
     recentRecords: {
         id: number;
@@ -45,243 +33,146 @@ const amount = new Intl.NumberFormat(undefined, {
     maximumFractionDigits: 2,
 });
 
-const formatDoctorName = (name: string): string => {
-    const cleanName = name
-        .replace(/\s*\[ppds demo\]\s*$/i, '')
-        .trim();
-
-    return /^dr\.?\s*/i.test(cleanName)
-        ? cleanName
-        : `Dr. ${cleanName}`;
-};
-
-const statistics = [
-    { title: 'Total Medicines', key: 'total_medicines' },
-    { title: 'Total Stock', key: 'total_stock' },
-    { title: 'Low Stock', key: 'low_stock_medicines' },
-    { title: 'Dispensing Records', key: 'total_dispensing_records' },
-] as const;
-
-export default function Dashboard({
-    stats,
-    recentRecords,
-    lowStockMedicines,
-}: DashboardProps) {
+export default function Dashboard({ stats, recentRecords, lowStockMedicines }: DashboardProps) {
     return (
-        <AppLayout
-            breadcrumbs={[
-                { title: 'Dashboard', href: route('dashboard') },
-            ]}
-        >
+        <AppLayout breadcrumbs={[{ title: 'Dashboard', href: route('dashboard') }]}>
             <Head title="Dashboard" />
 
-            <main className="space-y-6 p-5 md:p-7">
-                {/* Page heading */}
-                <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <main className="ppds-page">
+                <header className="ppds-page-heading">
                     <div>
-                        <h1 className="text-xl font-semibold tracking-tight">
-                            Dashboard
-                        </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Overview of medicine inventory and dispensing records.
-                        </p>
+                        <p>Pharmacy overview</p>
+                        <h1>Dashboard</h1>
+                        <p>Inventory position and recent dispensing activity.</p>
                     </div>
-
                     <div className="flex flex-wrap gap-2">
                         <Button variant="outline" asChild>
-                            <Link href={route('medicines.create')}>
-                                <Plus className="mr-2 size-4" />
-                                Add Medicine
-                            </Link>
+                            <Link href={route('medicines.create')}>Add medicine</Link>
                         </Button>
-
-                        <Button asChild className="bg-emerald-700 text-white hover:bg-emerald-800">
-                            <Link href={route('dispense-records.create')}>
-                                <Plus className="mr-2 size-4" />
-                                New Dispensing
-                            </Link>
+                        <Button asChild>
+                            <Link href={route('dispense-records.create')}>New dispense</Link>
                         </Button>
                     </div>
+                </header>
+
+                <section aria-label="Pharmacy statistics">
+                    <dl className="border-border bg-card grid border-y sm:grid-cols-2 lg:grid-cols-5">
+                        <Stat label="Active medicines" value={stats.total_medicines} />
+                        <Stat label="Units in stock" value={stats.total_stock} />
+                        <Stat label="Patients" value={stats.total_patients} />
+                        <Stat label="Prescribers" value={stats.total_doctors} />
+                        <Stat label="Dispensing records" value={stats.total_dispensing_records} />
+                    </dl>
+                    {stats.low_stock_medicines > 0 && (
+                        <p className="mt-3 text-sm text-amber-800">
+                            {stats.low_stock_medicines} medicine
+                            {stats.low_stock_medicines === 1 ? ' is' : 's are'} low or out of stock.
+                            <Link href={route('medicines.index')} className="text-primary ml-1 font-medium underline-offset-4 hover:underline">
+                                Review inventory
+                            </Link>
+                        </p>
+                    )}
                 </section>
 
-                {/* Statistics */}
-                <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    {statistics.map((item) => (
-                        <Card key={item.key} className="rounded-lg shadow-none">
-                            <CardContent className="p-5">
-                                <p className="text-sm text-muted-foreground">
-                                    {item.title}
-                                </p>
-                                <p className="mt-2 text-2xl font-semibold tabular-nums">
-                                    {stats[item.key].toLocaleString()}
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ))}
-                </section>
-
-                {/* Main content */}
-                <section className="grid gap-5 xl:grid-cols-[1.6fr_1fr]">
-                    {/* Recent dispensing */}
-                    <Card className="rounded-lg shadow-none">
-                        <CardHeader className="flex flex-row items-center justify-between border-b px-5 py-4">
+                <div className="grid gap-10 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
+                    <section className="min-w-0">
+                        <div className="border-border flex items-end justify-between gap-4 border-b pb-3">
                             <div>
-                                <CardTitle className="text-base font-semibold">
-                                    Recent Dispensing
-                                </CardTitle>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    Recently recorded transactions
-                                </p>
+                                <h2 className="text-base font-semibold">Recent dispensing</h2>
+                                <p className="text-muted-foreground mt-1 text-sm">Latest recorded transactions</p>
                             </div>
+                            <Link
+                                href={route('dispense-records.index')}
+                                className="text-primary shrink-0 text-sm font-medium underline-offset-4 hover:underline"
+                            >
+                                View all
+                            </Link>
+                        </div>
 
-                            <Button variant="ghost" size="sm" asChild>
-                                <Link href={route('dispense-records.index')}>
-                                    View all
-                                    <ArrowRight className="ml-2 size-4" />
-                                </Link>
-                            </Button>
-                        </CardHeader>
+                        {recentRecords.length === 0 ? (
+                            <p className="text-muted-foreground py-10 text-sm">No dispensing records yet. New transactions will appear here.</p>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[690px] text-left text-sm">
+                                    <thead>
+                                        <tr className="border-border text-muted-foreground border-b text-xs">
+                                            <th className="py-3 pr-4 font-medium">Date</th>
+                                            <th className="py-3 pr-4 font-medium">Patient</th>
+                                            <th className="py-3 pr-4 font-medium">Prescriber</th>
+                                            <th className="py-3 pr-4 font-medium">Dispensed</th>
+                                            <th className="py-3 text-right font-medium">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {recentRecords.map((record) => (
+                                            <tr key={record.id} className="border-border/70 border-b last:border-0">
+                                                <td className="text-muted-foreground py-3.5 pr-4 tabular-nums">{record.dispense_date}</td>
+                                                <td className="py-3.5 pr-4 font-medium">{record.patient_name}</td>
+                                                <td className="text-muted-foreground py-3.5 pr-4">{record.doctor_name}</td>
+                                                <td className="text-muted-foreground max-w-[240px] py-3.5 pr-4">
+                                                    <span className="line-clamp-2">
+                                                        {record.items.map((item) => `${item.medicine_name} ×${item.quantity}`).join(', ') ||
+                                                            'No medicine details'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3.5 text-right font-medium tabular-nums">{amount.format(record.total)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </section>
 
-                        <CardContent className="p-0">
-                            {recentRecords.length === 0 ? (
-                                <div className="px-5 py-12 text-center">
-                                    <ClipboardList className="mx-auto size-8 text-muted-foreground" />
-                                    <p className="mt-3 text-sm font-medium">
-                                        No dispensing records yet
-                                    </p>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        New transactions will appear here.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="divide-y">
-                                    {recentRecords.map((record) => (
-                                        <div
-                                            key={record.id}
-                                            className="flex flex-col justify-between gap-3 px-5 py-4 sm:flex-row sm:items-center"
-                                        >
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-medium">
-                                                    {record.patient_name}
-                                                </p>
-
-                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                    {record.items
-                                                        .map(
-                                                            (item) =>
-                                                                `${item.medicine_name} × ${item.quantity}`,
-                                                        )
-                                                        .join(', ') || 'No medicine details'}
-                                                </p>
-
-                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                    {formatDoctorName(record.doctor_name)}
-                                                    <span className="mx-2">·</span>
-                                                    {record.dispense_date}
-                                                </p>
-                                            </div>
-
-                                            <div className="sm:text-right">
-                                                <p className="text-sm font-medium tabular-nums">
-                                                    {amount.format(record.total)}
-                                                </p>
-                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                    Recorded
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Low stock */}
-                    <Card className="rounded-lg shadow-none">
-                        <CardHeader className="flex flex-row items-center justify-between border-b px-5 py-4">
+                    <section className="min-w-0">
+                        <div className="border-border flex items-end justify-between gap-4 border-b pb-3">
                             <div>
-                                <CardTitle className="text-base font-semibold">
-                                    Low Stock Medicines
-                                </CardTitle>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    Medicines with 10 or fewer units
-                                </p>
+                                <h2 className="text-base font-semibold">Stock attention</h2>
+                                <p className="text-muted-foreground mt-1 text-sm">{stats.low_stock_medicines} low or out of stock</p>
                             </div>
+                            <Link
+                                href={route('medicines.index')}
+                                className="text-primary shrink-0 text-sm font-medium underline-offset-4 hover:underline"
+                            >
+                                Inventory
+                            </Link>
+                        </div>
 
-                            <Button variant="ghost" size="icon" asChild>
-                                <Link
-                                    href={route('medicines.index')}
-                                    aria-label="View medicine inventory"
-                                >
-                                    <ArrowRight className="size-4" />
-                                </Link>
-                            </Button>
-                        </CardHeader>
-
-                        <CardContent className="p-0">
-                            {lowStockMedicines.length === 0 ? (
-                                <div className="px-5 py-12 text-center">
-                                    <Package className="mx-auto size-8 text-muted-foreground" />
-                                    <p className="mt-3 text-sm font-medium">
-                                        No low stock medicines
-                                    </p>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                        All listed medicines have sufficient stock.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="divide-y">
-                                    {lowStockMedicines.map((medicine) => (
-                                        <div
-                                            key={medicine.id}
-                                            className="flex items-center justify-between gap-3 px-5 py-4"
-                                        >
-                                            <div className="min-w-0">
-                                                <p className="truncate text-sm font-medium">
-                                                    {medicine.medicine_brand}
-                                                </p>
-                                                <p className="truncate text-xs text-muted-foreground">
-                                                    {medicine.generic_name}
-                                                </p>
-                                                <p className="mt-1 text-xs text-muted-foreground">
-                                                    SKU: {medicine.medicine_sku}
-                                                </p>
-                                            </div>
-
-                                            <span
-                                                className={`shrink-0 text-xs font-medium ${
-                                                    medicine.stock_quantity === 0
-                                                        ? 'text-red-600'
-                                                        : 'text-amber-600'
-                                                }`}
-                                            >
-                                                {medicine.stock_quantity === 0
-                                                    ? 'Out of stock'
-                                                    : `${medicine.stock_quantity} left`}
-                                            </span>
+                        {lowStockMedicines.length === 0 ? (
+                            <p className="text-muted-foreground py-10 text-sm">No medicines currently need a stock check.</p>
+                        ) : (
+                            <ul className="divide-border/70 divide-y">
+                                {lowStockMedicines.map((medicine) => (
+                                    <li key={medicine.id} className="flex items-center justify-between gap-4 py-4">
+                                        <div className="min-w-0">
+                                            <p className="truncate text-sm font-medium">{medicine.medicine_brand}</p>
+                                            <p className="text-muted-foreground mt-1 truncate text-xs">
+                                                {medicine.generic_name} · {medicine.medicine_sku}
+                                            </p>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-
-                            {lowStockMedicines.length > 0 && (
-                                <div className="border-t px-5 py-3">
-                                    <Link
-                                        href={route('medicines.index')}
-                                        className="text-sm text-emerald-700 hover:underline"
-                                    >
-                                        Manage inventory
-                                    </Link>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </section>
-
-                <p className="border-t pt-4 text-xs text-muted-foreground">
-                    Pharmacy Prescription Dispensing System
-                </p>
+                                        <span
+                                            className={`shrink-0 text-sm font-semibold tabular-nums ${
+                                                medicine.stock_quantity === 0 ? 'text-destructive' : 'text-amber-800'
+                                            }`}
+                                        >
+                                            {medicine.stock_quantity === 0 ? 'Out' : `${medicine.stock_quantity} left`}
+                                        </span>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </section>
+                </div>
             </main>
         </AppLayout>
+    );
+}
+
+function Stat({ label, value }: { label: string; value: number }) {
+    return (
+        <div className="border-border border-b px-4 py-4 first:pl-4 sm:px-5 lg:border-r lg:border-b-0 lg:last:border-r-0">
+            <dt className="text-muted-foreground text-xs font-medium">{label}</dt>
+            <dd className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{value.toLocaleString()}</dd>
+        </div>
     );
 }

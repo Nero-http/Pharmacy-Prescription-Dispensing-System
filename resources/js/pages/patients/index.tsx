@@ -92,8 +92,8 @@ export default function PatientIndex({ patients, search }: PatientIndexProps) {
                 </AlertDialogContent>
             </AlertDialog>
 
-            <main className="space-y-6 p-4 md:p-8">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <main className="ppds-page">
+                <div className="ppds-page-heading">
                     <div>
                         <p className="text-sm font-medium text-primary">Patient care</p>
                         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Patient Management</h1>
@@ -158,7 +158,7 @@ export default function PatientIndex({ patients, search }: PatientIndexProps) {
                         ) : (
                             <>
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm">
+                                    <table className="w-full min-w-[560px] text-left text-sm">
                                         <thead>
                                             <tr className="border-b text-xs font-medium tracking-wide text-muted-foreground uppercase">
                                                 <th className="px-3 py-3">#</th>

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateDispenseRecordRequest extends FormRequest
 {
@@ -16,8 +17,16 @@ class UpdateDispenseRecordRequest extends FormRequest
         $today = now(config('app.timezone'));
 
         return [
-            'patient_id' => ['required', 'integer', 'exists:patients,id'],
-            'doctor_id' => ['required', 'integer', 'exists:doctors,id'],
+            'patient_id' => [
+                'required',
+                'integer',
+                Rule::exists('patients', 'id')->whereNull('deleted_at'),
+            ],
+            'doctor_id' => [
+                'required',
+                'integer',
+                Rule::exists('doctors', 'id')->whereNull('deleted_at'),
+            ],
             'dispense_date' => [
                 'bail',
                 'required',

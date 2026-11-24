@@ -20,7 +20,10 @@ class DispenseRecord extends Model
     protected function casts(): array
     {
         return [
-            'dispense_date' => 'date',
+            // Use date:Y-m-d so JSON serialisation always produces 'YYYY-MM-DD'
+            // instead of a full ISO-8601 timestamp.  This fixes the index table
+            // date column showing "2026-10-05T00:00:00.000000Z".
+            'dispense_date' => 'date:Y-m-d',
         ];
     }
 

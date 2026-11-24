@@ -26,7 +26,7 @@ class DoctorController extends Controller
                   ->orWhere('doctor_license_no', 'like', '%' . $search . '%');
             }))
             ->orderBy('doctor_name')
-            ->paginate(15)
+            ->paginate(5)
             ->withQueryString();
 
         return Inertia::render('doctors/index', [
@@ -79,9 +79,16 @@ class DoctorController extends Controller
             ->with('success', 'Doctor updated successfully.');
     }
 
-    public function destroy(Doctor $doctor): RedirectResponse
+    public function destroy(Request $request, Doctor $doctor): JsonResponse|RedirectResponse
     {
         $doctor->delete();
+
+        // JSON callers (e.g. the inline dispense-record form) expect a JSON body.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => 'Doctor deleted successfully.',
+            ]);
+        }
 
         return redirect()
             ->route('doctors.index')

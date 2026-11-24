@@ -57,7 +57,7 @@ export default function DoctorForm({ doctor }: { doctor: Doctor | null }) {
             ]}
         >
             <Head title={title} />
-            <main className="mx-auto w-full max-w-2xl space-y-6 p-4 md:p-8">
+            <main className="ppds-page ppds-form-page-sm">
                 <div>
                     <Button variant="ghost" size="sm" className="-ml-3 mb-3" asChild>
                         <Link href={route('doctors.index')}>

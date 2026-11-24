@@ -11,13 +11,13 @@ use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use Inertia\Inertia;
 
-// Redirect visitors to login and authenticated users to PPDS.
+// Show landing page to guests; redirect authenticated users to the dashboard.
 Route::get('/', function () {
     if (auth()->check()) {
         return redirect()->route('dashboard');
     }
 
-    return redirect()->route('login');
+    return Inertia::render('welcome');
 })->name('home');
 
 // Protect all PPDS pages.
@@ -34,7 +34,7 @@ Route::middleware('auth')->group(function () {
         ->name('appearance.edit');
 
     Route::resource('medicines', MedicineController::class)
-        ->only(['index', 'create', 'store', 'edit', 'update']);
+        ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
 
     Route::resource('dispense-records', DispenseRecordController::class)
         ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
